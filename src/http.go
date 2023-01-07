@@ -7,15 +7,19 @@ import (
 	"time"
 )
 
-var ch = make(chan Packet)
+var streams = NewStreams()
 
 func serveHTTP() {
 	router := gin.Default()
 	gin.SetMode(gin.DebugMode)
 
-	router.POST("/live/s1", func(c *gin.Context) {
+	router.POST("/live/:suuid", func(c *gin.Context) {
 		var req = c.Request
+		suuid := req.FormValue("suuid")
 		readCloser := req.Body
+		streams.addInput(suuid)
+		defer streams.removeInput(suuid)
+
 		// TODO: Need to find the most efficient way to get a clean buffer
 		data := make([]byte, 100000)
 		for {
@@ -24,7 +28,7 @@ func serveHTTP() {
 			data = data[:numOfByte]
 			d := NewPacket(data[:numOfByte]) //make([]byte, numOfByte)
 			//copy(d, data) // TODO: Would copy introduce inefficiencies?
-			ch <- d
+			streams.put(suuid, d)
 			if err != nil {
 				log.Println("Error: " + err.Error())
 				break
@@ -55,6 +59,8 @@ func ws(ws *websocket.Conn) {
 	//	return
 	//}
 	err := ws.SetWriteDeadline(time.Now().Add(50 * time.Second))
+	cuuid, ch := streams.addClient(suuid)
+	defer streams.deleteClient(suuid, cuuid)
 	//err = websocket.Message.Send(ws, init)
 	if err != nil {
 		return
