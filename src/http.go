@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var ch = make(chan []byte, 100000)
+var ch = make(chan Packet)
 
 func serveHTTP() {
 	router := gin.Default()
@@ -22,8 +22,8 @@ func serveHTTP() {
 			data = data[:100000]
 			numOfByte, err := readCloser.Read(data)
 			data = data[:numOfByte]
-			d := make([]byte, numOfByte)
-			copy(d, data) // TODO: Would copy introduce inefficiencies?
+			d := NewPacket(data[:numOfByte]) //make([]byte, numOfByte)
+			//copy(d, data) // TODO: Would copy introduce inefficiencies?
 			ch <- d
 			if err != nil {
 				log.Println("Error: " + err.Error())
@@ -75,12 +75,12 @@ func ws(ws *websocket.Conn) {
 	for {
 		data := <-ch
 
-		log.Println("Data received ", len(data), " bytes")
+		log.Println("Data received ", len(data.pckt), " bytes")
 		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
 			return
 		}
-		err := websocket.Message.Send(ws, data)
+		err := websocket.Message.Send(ws, data.pckt)
 		if err != nil {
 			return
 		}

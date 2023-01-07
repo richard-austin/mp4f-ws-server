@@ -11,14 +11,24 @@ func NewStreams() *Streams {
 }
 
 type PacketStream struct {
-	ps chan []byte
+	ps chan Packet
 }
 
 func NewPacketStream() *PacketStream {
-	ps := PacketStream{ps: make(chan []byte)}
+	ps := PacketStream{ps: make(chan Packet)}
 	return &ps
 }
 
 func (self *Streams) addPcktStream(uri string) {
 	self.Streams[uri] = NewPacketStream()
+}
+
+type Packet struct {
+	pckt []byte
+}
+
+func NewPacket(pckt []byte) Packet {
+	b := make([]byte, len(pckt))
+	copy(b, pckt)
+	return Packet{pckt: b}
 }
