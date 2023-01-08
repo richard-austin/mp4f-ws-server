@@ -22,13 +22,27 @@ func serveHTTP() {
 
 		// TODO: Need to find the most efficient way to get a clean buffer
 		data := make([]byte, 100000)
+		pcktCount := 0
+
 		for {
 			data = data[:100000]
 			numOfByte, err := readCloser.Read(data)
+			if err != nil {
+				log.Println("Error in read loop for stream ", suuid, ":- ", err.Error())
+				break
+			}
 			data = data[:numOfByte]
 			d := NewPacket(data[:numOfByte]) //make([]byte, numOfByte)
-			//copy(d, data) // TODO: Would copy introduce inefficiencies?
-			streams.put(suuid, d)
+			if pcktCount == 0 {
+				err = streams.putFtyp(suuid, d)
+				pcktCount++
+			} else if pcktCount == 1 {
+				err = streams.putMoov(suuid, d)
+				pcktCount++
+			} else {
+				err = streams.put(suuid, d)
+			}
+
 			if err != nil {
 				log.Println("Error: " + err.Error())
 				break
@@ -78,19 +92,44 @@ func ws(ws *websocket.Conn) {
 		}
 	}()
 
+	var pcktCount int = 0
+	started := false
 	for {
-		data := <-ch
+		var err error
+		var data Packet
+
+		if pcktCount == 0 {
+			err, data = streams.getFtyp(suuid)
+			if err != nil {
+				log.Println("Error getting ftyp: ", err.Error())
+			}
+			pcktCount++
+		} else if pcktCount == 1 {
+			err, data = streams.getMoov(suuid)
+			if err != nil {
+				log.Println("Error getting moov: ", err.Error())
+			}
+			pcktCount++
+		} else {
+			data = <-ch
+			if !started && !data.isKeyFrame() {
+				continue
+			} else {
+				started = true
+			}
+		}
 
 		log.Println("Data received ", len(data.pckt), " bytes")
 		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
 			return
 		}
-		err := websocket.Message.Send(ws, data.pckt)
+		err = websocket.Message.Send(ws, data.pckt)
 		if err != nil {
 			return
 		}
 	}
+
 	//noVideo := time.NewTimer(10 * time.Second)
 	//for {
 	//	select {
