@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+
+<!--
+https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragmented-live-mp4-stream/
+
+-->
+
+
+<html>
+<head>
+    <title>WebSocket MSE demo</title>
+</head>
+
+<body>
+<!-- muted attribute required for chrome autoplay-->
+<!--        <audio id="stream_live" controls autoplay>Your browser does not support the audio tag.</audio>-->
+<video id="stream_live"
+       width="640" height="480"
+       controls autoplay
+       muted="muted"
+       preload="auto">
+    Your browser does not support the video tag.
+</video>
+</body>
+
+<script>
+    // *** USER PARAMETERS ***
+    let verbose = false;
+    // let verbose = true; // enable for saturating the console ..
+    let buffering_sec = 1.2; // use some reasonable value
+
+    let buffering_sec_seek = buffering_sec * 0.9;
+    // ..seek the stream if it's this much away or
+    // from the last available timestamp
+    let buffering_sec_seek_distance = buffering_sec * 0.5;
+    // .. jump to this distance from the last avail. timestamp
+
+    // *** INTERNAL PARAMETERS ***
+    // set mimetype and codec
+    var mimeType = "video/mp4";
+
+    let stream_started = false; // is the source_buffer updateend callback active nor not
+
+    // create media source instance
+    let ms = new MediaSource();
+
+    // queue for incoming media packets
+    let queue = [];
+
+    let stream_live; // the HTMLMediaElement (i.e. <video> element)
+    let ws; // websocket
+    let seeked = false; // have seeked manually once ..
+    let cc = 0;
+
+    let source_buffer; // source_buffer instance
+
+    let pass = 0;
+
+    // *** MP4 Box manipulation functions ***
+    // taken from here: https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragmented-live-mp4-stream/
+
+    function toInt(arr, index) { // From bytes to big-endian 32-bit integer.  Input: Uint8Array, index
+        let dv = new DataView(arr.buffer, 0);
+        return dv.getInt32(index, false); // big endian
+    }
+
+    function toString(arr, fr, to) { // From bytes to string.  Input: Uint8Array, start index, stop index.
+        // https://developers.google.com/web/updates/2012/06/How-to-convert-ArrayBuffer-to-and-from-String
+        return String.fromCharCode.apply(null, arr.slice(fr, to));
+    }
+
+    let started = false;
+    // consider these callbacks:
+    // - putPacket : called when websocket receives data
+    // - loadPacket : called when source_buffer is ready for more data
+    // Both operate on a common fifo
+    function putPacket(arr) {
+        // receives ArrayBuffer.  Called when websocket gets more data
+        // first packet ever to arrive: write directly to source_buffer
+        // source_buffer ready to accept: write directly to source_buffer
+        // otherwise insert it to queue
+        let data = new Uint8Array(event.data);
+        if (data[0] === 9 && !started) {
+            started = true;
+            let codecs  // https://wiki.whatwg.org/wiki/Video_type_parameters
+            decoded_arr = data.slice(1);
+            if (window.TextDecoder) {
+                codecs = new TextDecoder("utf-8").decode(decoded_arr);
+            } else {
+                codecs = Utf8ArrayToStr(decoded_arr);
+            }
+            if (verbose) {
+                console.log('first packet with codec data: ' + codecs);
+            }
+
+            // if your stream has audio, remember to include it in these definitions.. otherwise your mse goes sour
+            let codecPars = mimeType + ';codecs="' + codecs + '"';
+            if (!(window.MediaSource && window.MediaSource.isTypeSupported(codecPars))) {
+                console.log(codecPars + "Not supported");
+            }
+            ms.duration = buffering_sec;
+            source_buffer = ms.addSourceBuffer(codecPars);
+
+            // https://developer.mozilla.org/en-US/docs/Web/API/source_buffer/mode
+       //     let myMode = source_buffer.mode;
+            source_buffer.mode = 'sequence';
+            // source_buffer.mode = 'segments';  // TODO: should we use this instead?
+
+            source_buffer.addEventListener("updateend", loadPacket);
+        } else {
+
+            // keep the latency to minimum
+            let latest = stream_live.duration;
+            if ((stream_live.duration >= buffering_sec) &&
+                ((latest - stream_live.currentTime) > buffering_sec_seek)) {
+                let controls = stream_live.controls
+                stream_live.controls = false;
+                console.log("seek from ", stream_live.currentTime, " to ", latest);
+                df = (stream_live.duration - stream_live.currentTime); // this much away from the last available frame
+                if ((df > buffering_sec_seek)) {
+                    seek_to = stream_live.duration - buffering_sec_seek_distance;
+                    stream_live.currentTime = seek_to;
+                }
+                stream_live.controls = controls;
+            }
+
+            data = arr;
+            if (!stream_started) {
+                if (verbose) {
+                    console.log("Streaming started: ", memview[0], memview[1], memview[2], memview[3], memview[4]);
+                }
+                source_buffer.appendBuffer(data);
+                stream_started = true;
+                cc = cc + 1;
+                return;
+            }
+
+            queue.push(data); // add to the end
+            if (verbose) {
+                console.log("queue push:", queue.length);
+            }
+        }
+    }
+
+
+    function loadPacket() { // called when source_buffer is ready for more
+        if (!source_buffer.updating) { // really, really ready
+            if (queue.length > 0) {
+
+                inp = queue.shift(); // pop from the beginning
+                if (verbose) {
+                    console.log("queue pop:", queue.length);
+                }
+
+                let memview = new Uint8Array(inp);
+
+                if (verbose) {
+                    console.log(" ==> writing buffer with", memview[0], memview[1], memview[2], memview[3]);
+                }
+
+                source_buffer.appendBuffer(inp);
+                cc = cc + 1;
+            } else { // the queue runs empty, so the next packet is fed directly
+                stream_started = false;
+            }
+        } else { // so it was not?
+        }
+    }
+
+
+    function opened() { // MediaSource object is ready to go
+        // https://developer.mozilla.org/en-US/docs/Web/API/MediaSource/duration
+        // ws = new WebSocket("ws://localhost:8089/ws/");
+        let host = window.location.host
+        ws = new WebSocket("ws://" + host + "/ws/s1?suuid=stream1");
+        ws.binaryType = "arraybuffer";
+        ws.onmessage = function (event) {
+            putPacket(event.data);
+        };
+    }
+
+    function startup() {
+        ms.addEventListener('sourceopen', opened, false);
+
+        // get reference to video
+        stream_live = document.getElementById('stream_live');
+
+        // set mediasource as source of video
+        stream_live.src = window.URL.createObjectURL(ms);
+    }
+
+
+    window.onload = function () {
+        startup();
+    }
+
+</script>
+
+</html>
+
+
