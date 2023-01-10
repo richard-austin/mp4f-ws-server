@@ -1,32 +1,28 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"sync"
 )
 
 type Stream struct {
 	ftyp        Packet
 	moov        Packet
+	codecs      string
 	PcktStreams map[string]PacketStream // One packetStream for each client connected through the suuid
 	mutex       sync.RWMutex
 }
 
-func (s *Stream) addFtype(pckt Packet) {
-	s.ftyp = pckt
-}
-
-func (s *Stream) addMoov(pckt Packet) {
-	s.moov = pckt
-}
-
-//	func (s *Stream) addClient(suuid string) {
-//		s.mutex.Lock()
-//		defer s.mutex.Unlock()
+//	func (s *Stream) addFtype(pckt Packet) {
+//		s.ftyp = pckt
+//	}
 //
-//		s.PcktStreams[suuid] = PacketStream{}
+//	func (s *Stream) addMoov(pckt Packet) {
+//		s.moov = pckt
 //	}
 type StreamMap map[string]Stream
 type Streams struct {
@@ -116,6 +112,12 @@ func (s *Streams) putMoov(suuid string, pckt Packet) error {
 	return retVal
 }
 
+func (s *Streams) getCodecs(suuid string) (err error, pckt Packet) {
+	pckt.pckt = append([]byte{0x09}, []byte(s.StreamMap[suuid].codecs)...)
+	err = nil
+	return
+}
+
 func (s *Streams) getFtyp(suuid string) (error, Packet) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -141,6 +143,61 @@ func (s *Streams) getMoov(suuid string) (error, Packet) {
 		retVal = fmt.Errorf("No moov for stream ", suuid)
 	}
 	return retVal, stream.moov
+}
+
+func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
+	if s.StreamMap[suuid].moov.pckt == nil {
+		err = fmt.Errorf("Cannot get codecs, no moov data")
+		return
+	}
+	names := []string{"trak", "mdia", "minf", "stbl", "stsd", "avc1", "avcC"}
+
+	val := s.StreamMap[suuid].moov.pckt
+	// Find the video codec data
+	trakLen := 0
+	for i, n := range names {
+		val = getSubBox(Packet{val}, n)
+		if val != nil {
+			log.Println("Found ", n)
+			if i == 0 {
+				// Save the length of the trak
+				trakLen = int(binary.BigEndian.Uint32(val[:4]))
+			}
+		} else {
+			log.Printf("Error: No %s in moov", n)
+			err = fmt.Errorf("No %s in moov", n)
+			break
+		}
+	}
+	var _ = trakLen
+	// Save the codec data in hex string format as required by mse
+	codecs = fmt.Sprintf("avc1.%2x", val[9:12])
+
+	// Find audio codec data (if present)
+	val = s.StreamMap[suuid].moov.pckt[trakLen:]
+	names2 := []string{"trak", "mdia", "minf", "stbl", "stsd", "mp4a", "esds"}
+
+	for _, n := range names2 {
+		val = getSubBox(Packet{val}, n)
+		if val != nil {
+			log.Println("Found ", n)
+		} else {
+			log.Printf("No second %s in moov. No audio present", n)
+			break
+		}
+	}
+
+	if val != nil {
+		// Audio stream present
+		aacCodec := val[25:27]
+		aacCodec[1] &= 0x0f // Mask off the high nybble
+		codecs += fmt.Sprintf(", mp4a.%2x.%x", aacCodec[0], aacCodec[1])
+	}
+
+	stream := s.StreamMap[suuid]
+	stream.codecs = codecs
+	s.StreamMap[suuid] = stream
+	return
 }
 
 type PacketStream struct {
@@ -174,25 +231,17 @@ func (p Packet) isKeyFrame() (retVal bool) {
 	return
 }
 
-func getBox(pckt Packet, index int) (len int, name string) {
-	len = int(binary.BigEndian.Uint32(pckt.pckt[index : index+4]))
-	name = string(pckt.pckt[index+4 : index+8])
-	return
-}
-
 func getSubBox(pckt Packet, boxName string) (sub_box []byte) {
-	index := 0
-	len, _ := getBox(pckt, index)
+	searchData := pckt.pckt
+	searchTerm := []byte(boxName)
+	idx := bytes.Index(searchData, searchTerm)
 
-	index += 8
+	if idx >= 4 {
+		length := int(binary.BigEndian.Uint32(searchData[idx-4 : idx]))
+		sub_box = searchData[idx-4 : length+idx-4]
 
-	for i := index; i < len; {
-		length, nam := getBox(pckt, i)
-
-		if nam == boxName {
-			sub_box = Packet{pckt: pckt.pckt[i : i+length]}.pckt
-		}
-		i += length
+	} else {
+		sub_box = nil
 	}
 	return
 }

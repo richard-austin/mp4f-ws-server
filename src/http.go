@@ -38,6 +38,11 @@ func serveHTTP() {
 				pcktCount++
 			} else if pcktCount == 1 {
 				err = streams.putMoov(suuid, d)
+				err, s := streams.getCodecsFromMoov(suuid)
+				_ = s
+				if err != nil {
+					return
+				}
 				pcktCount++
 			} else {
 				err = streams.put(suuid, d)
@@ -99,12 +104,18 @@ func ws(ws *websocket.Conn) {
 		var data Packet
 
 		if pcktCount == 0 {
+			err, data = streams.getCodecs(suuid)
+			if err != nil {
+				log.Println("Error getting codecs: ", err.Error())
+			}
+			pcktCount++
+		} else if pcktCount == 1 {
 			err, data = streams.getFtyp(suuid)
 			if err != nil {
 				log.Println("Error getting ftyp: ", err.Error())
 			}
 			pcktCount++
-		} else if pcktCount == 1 {
+		} else if pcktCount == 2 {
 			err, data = streams.getMoov(suuid)
 			if err != nil {
 				log.Println("Error getting moov: ", err.Error())
