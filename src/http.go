@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/net/websocket"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -12,7 +13,15 @@ var streams = NewStreams()
 func serveHTTP() {
 	router := gin.Default()
 	gin.SetMode(gin.DebugMode)
+	router.LoadHTMLGlob("../web/*")
 
+	// For web page
+	router.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "index.html", gin.H{
+			//	"suuid": c.Param("suuid"),
+		})
+	})
+	// For ffmpeg to write to
 	router.POST("/live/:suuid", func(c *gin.Context) {
 		var req = c.Request
 		suuid := req.FormValue("suuid")
@@ -35,15 +44,19 @@ func serveHTTP() {
 			d := NewPacket(data[:numOfByte]) //make([]byte, numOfByte)
 			if pcktCount == 0 {
 				err = streams.putFtyp(suuid, d)
-				pcktCount++
-			} else if pcktCount == 1 {
-				err = streams.putMoov(suuid, d)
-				err, s := streams.getCodecsFromMoov(suuid)
-				_ = s
 				if err != nil {
 					return
 				}
 				pcktCount++
+			} else if pcktCount == 1 {
+				err = streams.putMoov(suuid, d)
+				if err == nil {
+					err, _ := streams.getCodecsFromMoov(suuid)
+					if err != nil {
+						return
+					}
+					pcktCount++
+				}
 			} else {
 				err = streams.put(suuid, d)
 			}
@@ -53,10 +66,10 @@ func serveHTTP() {
 				break
 			}
 			log.Println(numOfByte, " bytes received")
-			//	c.Writer.WriteHeader(http.StatusOK)
 		}
 	})
 
+	// For websocket connections from mse
 	router.GET("/ws/:suuid", func(c *gin.Context) {
 		handler := websocket.Handler(ws)
 		handler.ServeHTTP(c.Writer, c.Request)
@@ -91,7 +104,7 @@ func ws(ws *websocket.Conn) {
 			var message string
 			err := websocket.Message.Receive(ws, &message)
 			if err != nil {
-				ws.Close()
+				_ = ws.Close()
 				return
 			}
 		}
@@ -106,19 +119,19 @@ func ws(ws *websocket.Conn) {
 		if pcktCount == 0 {
 			err, data = streams.getCodecs(suuid)
 			if err != nil {
-				log.Println("Error getting codecs: ", err.Error())
+				log.Printf("Error getting codecs: %s", err.Error())
 			}
 			pcktCount++
 		} else if pcktCount == 1 {
 			err, data = streams.getFtyp(suuid)
 			if err != nil {
-				log.Println("Error getting ftyp: ", err.Error())
+				log.Printf("Error getting ftyp: %s", err.Error())
 			}
 			pcktCount++
 		} else if pcktCount == 2 {
 			err, data = streams.getMoov(suuid)
 			if err != nil {
-				log.Println("Error getting moov: ", err.Error())
+				log.Printf("Error getting moov: %s", err.Error())
 			}
 			pcktCount++
 		} else {
@@ -140,32 +153,4 @@ func ws(ws *websocket.Conn) {
 			return
 		}
 	}
-
-	//noVideo := time.NewTimer(10 * time.Second)
-	//for {
-	//	select {
-	//	case <-noVideo.C:
-
-	//		log.Println("noVideo")
-	//		return
-	//	case pck := <-ch:
-	//		if pck.IsKeyFrame {
-	//			noVideo.Reset(10 * time.Second)
-	//			start = true
-	//		}
-	//		if !start {
-	//			continue
-	//		}
-	//		if ready {
-	//			err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	//			if err != nil {
-	//				return
-	//			}
-	//			err := websocket.Message.Send(ws, buf)
-	//			if err != nil {
-	//				return
-	//			}
-	//		}
-	//	}
-	// }
 }

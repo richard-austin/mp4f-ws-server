@@ -14,16 +14,7 @@ type Stream struct {
 	moov        Packet
 	codecs      string
 	PcktStreams map[string]PacketStream // One packetStream for each client connected through the suuid
-	mutex       sync.RWMutex
 }
-
-//	func (s *Stream) addFtype(pckt Packet) {
-//		s.ftyp = pckt
-//	}
-//
-//	func (s *Stream) addMoov(pckt Packet) {
-//		s.moov = pckt
-//	}
 type StreamMap map[string]Stream
 type Streams struct {
 	mutex sync.RWMutex
@@ -79,37 +70,47 @@ func (s *Streams) put(suuid string, pckt Packet) error {
 		}
 
 	} else {
-		retVal = fmt.Errorf("No stream with name ", suuid, " was found")
+		retVal = fmt.Errorf("No stream with name %s was found", suuid)
 	}
 	return retVal
 }
 
-func (s *Streams) putFtyp(suuid string, pckt Packet) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	var retVal error = nil
-	stream, ok := s.StreamMap[suuid]
-	if ok {
-		stream.ftyp = pckt
-		s.StreamMap[suuid] = stream
+func (s *Streams) putFtyp(suuid string, pckt Packet) (retVal error) {
+	retVal = nil
+	// Check it is actually a ftyp
+	val := getSubBox(pckt, "ftyp")
+	if val == nil {
+		retVal = fmt.Errorf("The packet recieved in putMoov was not a moov")
+		return
 	} else {
-		retVal = fmt.Errorf("Stream ", suuid, " not found")
+		stream, ok := s.StreamMap[suuid]
+		if ok {
+			stream.ftyp = pckt
+			s.StreamMap[suuid] = stream
+		} else {
+			retVal = fmt.Errorf("Stream %s not found", suuid)
+		}
 	}
-	return retVal
+	return
 }
 
-func (s *Streams) putMoov(suuid string, pckt Packet) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	var retVal error = nil
-	stream, ok := s.StreamMap[suuid]
-	if ok {
-		stream.moov = pckt
-		s.StreamMap[suuid] = stream
+func (s *Streams) putMoov(suuid string, pckt Packet) (retVal error) {
+	retVal = nil
+	// Check it is actually a moov
+	val := getSubBox(pckt, "moov")
+	if val == nil {
+		retVal = fmt.Errorf("The packet recieved in putMoov was not a moov")
+		return
 	} else {
-		retVal = fmt.Errorf("Stream ", suuid, " not found")
+		stream, ok := s.StreamMap[suuid]
+		if ok {
+			stream.moov = pckt
+			s.StreamMap[suuid] = stream
+		} else {
+			retVal = fmt.Errorf("Stream %s not found", suuid)
+		}
 	}
-	return retVal
+	return
 }
 
 func (s *Streams) getCodecs(suuid string) (err error, pckt Packet) {
@@ -119,22 +120,18 @@ func (s *Streams) getCodecs(suuid string) (err error, pckt Packet) {
 }
 
 func (s *Streams) getFtyp(suuid string) (error, Packet) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	var retVal error = nil
 	stream, ok := s.StreamMap[suuid]
 	if !ok {
-		retVal = fmt.Errorf("Stream ", suuid, " not found")
+		retVal = fmt.Errorf("Stream %s not found", suuid)
 	} else if stream.ftyp.pckt == nil {
-		retVal = fmt.Errorf("No ftyp for stream ", suuid)
+		retVal = fmt.Errorf("No ftyp for stream %s", suuid)
 	}
 	return retVal, stream.ftyp
 
 }
 
 func (s *Streams) getMoov(suuid string) (error, Packet) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	var retVal error = nil
 	stream, ok := s.StreamMap[suuid]
 	if !ok {
@@ -142,6 +139,7 @@ func (s *Streams) getMoov(suuid string) (error, Packet) {
 	} else if stream.moov.pckt == nil {
 		retVal = fmt.Errorf("No moov for stream ", suuid)
 	}
+
 	return retVal, stream.moov
 }
 

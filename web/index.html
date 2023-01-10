@@ -27,12 +27,12 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     // *** USER PARAMETERS ***
     let verbose = false;
     // let verbose = true; // enable for saturating the console ..
-    let buffering_sec = 0.8; // use some reasonable value
+    let buffering_sec = 1.2; // use some reasonable value
 
-    let buffering_sec_seek = buffering_sec*0.9;
+    let buffering_sec_seek = buffering_sec * 0.9;
     // ..seek the stream if it's this much away or
     // from the last available timestamp
-    let buffering_sec_seek_distance = buffering_sec*0.5;
+    let buffering_sec_seek_distance = buffering_sec * 0.5;
     // .. jump to this distance from the last avail. timestamp
 
     // *** INTERNAL PARAMETERS ***
@@ -66,10 +66,10 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
 
     function toString(arr, fr, to) { // From bytes to string.  Input: Uint8Array, start index, stop index.
         // https://developers.google.com/web/updates/2012/06/How-to-convert-ArrayBuffer-to-and-from-String
-        return String.fromCharCode.apply(null, arr.slice(fr,to));
+        return String.fromCharCode.apply(null, arr.slice(fr, to));
     }
 
-
+    let started = false;
     // consider these callbacks:
     // - putPacket : called when websocket receives data
     // - loadPacket : called when source_buffer is ready for more data
@@ -80,7 +80,8 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
         // source_buffer ready to accept: write directly to source_buffer
         // otherwise insert it to queue
         let data = new Uint8Array(event.data);
-        if (data[0] === 9) {
+        if (data[0] === 9 && !started) {
+            started = true;
             let codecs  // https://wiki.whatwg.org/wiki/Video_type_parameters
             decoded_arr = data.slice(1);
             if (window.TextDecoder) {
@@ -93,33 +94,34 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
             }
 
             // if your stream has audio, remember to include it in these definitions.. otherwise your mse goes sour
-            let codecPars = mimeType+';codecs="'+codecs+'"';
-            if(!(window.MediaSource && window.MediaSource.isTypeSupported(codecPars)))
-            {
-                console.log(codecPars+"Not supported");
+            let codecPars = mimeType + ';codecs="' + codecs + '"';
+            if (!(window.MediaSource && window.MediaSource.isTypeSupported(codecPars))) {
+                console.log(codecPars + "Not supported");
             }
             ms.duration = buffering_sec;
             source_buffer = ms.addSourceBuffer(codecPars);
 
             // https://developer.mozilla.org/en-US/docs/Web/API/source_buffer/mode
-            let myMode = source_buffer.mode;
+       //     let myMode = source_buffer.mode;
             source_buffer.mode = 'sequence';
             // source_buffer.mode = 'segments';  // TODO: should we use this instead?
 
-            source_buffer.addEventListener("updateend",loadPacket);
-        }
-        else {
+            source_buffer.addEventListener("updateend", loadPacket);
+        } else {
 
             // keep the latency to minimum
             let latest = stream_live.duration;
             if ((stream_live.duration >= buffering_sec) &&
                 ((latest - stream_live.currentTime) > buffering_sec_seek)) {
+                let controls = stream_live.controls
+                stream_live.controls = false;
                 console.log("seek from ", stream_live.currentTime, " to ", latest);
                 df = (stream_live.duration - stream_live.currentTime); // this much away from the last available frame
                 if ((df > buffering_sec_seek)) {
                     seek_to = stream_live.duration - buffering_sec_seek_distance;
                     stream_live.currentTime = seek_to;
                 }
+                stream_live.controls = controls;
             }
 
             data = arr;
@@ -143,23 +145,25 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
 
     function loadPacket() { // called when source_buffer is ready for more
         if (!source_buffer.updating) { // really, really ready
-            if (queue.length>0) {
+            if (queue.length > 0) {
 
                 inp = queue.shift(); // pop from the beginning
-                if (verbose) { console.log("queue pop:", queue.length); }
+                if (verbose) {
+                    console.log("queue pop:", queue.length);
+                }
 
                 let memview = new Uint8Array(inp);
 
-                if (verbose) { console.log(" ==> writing buffer with", memview[0], memview[1], memview[2], memview[3]); }
+                if (verbose) {
+                    console.log(" ==> writing buffer with", memview[0], memview[1], memview[2], memview[3]);
+                }
 
                 source_buffer.appendBuffer(inp);
                 cc = cc + 1;
-            }
-            else { // the queue runs empty, so the next packet is fed directly
+            } else { // the queue runs empty, so the next packet is fed directly
                 stream_started = false;
             }
-        }
-        else { // so it was not?
+        } else { // so it was not?
         }
     }
 
@@ -167,7 +171,8 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     function opened() { // MediaSource object is ready to go
         // https://developer.mozilla.org/en-US/docs/Web/API/MediaSource/duration
         // ws = new WebSocket("ws://localhost:8089/ws/");
-        ws = new WebSocket("ws://localhost:8081/ws/s1?suuid=stream1");
+        let host = window.location.host
+        ws = new WebSocket("ws://" + host + "/ws/s1?suuid=stream1");
         ws.binaryType = "arraybuffer";
         ws.onmessage = function (event) {
             putPacket(event.data);
@@ -175,7 +180,7 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     }
 
     function startup() {
-        ms.addEventListener('sourceopen',opened,false);
+        ms.addEventListener('sourceopen', opened, false);
 
         // get reference to video
         stream_live = document.getElementById('stream_live');
@@ -185,7 +190,7 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     }
 
 
-    window.onload = function() {
+    window.onload = function () {
         startup();
     }
 
