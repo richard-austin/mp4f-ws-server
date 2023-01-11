@@ -79,7 +79,7 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
         // first packet ever to arrive: write directly to source_buffer
         // source_buffer ready to accept: write directly to source_buffer
         // otherwise insert it to queue
-        let data = new Uint8Array(event.data);
+        let data = new Uint8Array(arr);
         if (data[0] === 9 && !started) {
             started = true;
             let codecs  // https://wiki.whatwg.org/wiki/Video_type_parameters
