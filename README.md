@@ -13,4 +13,4 @@ Under development:-
 * Get the codec info (video and, optionally, audio) from the moov trak boxes and save against the corresponding stream id. 
 
 #### Stage 1.0.2
-* HTTP service at http://<base address>/h which does not send the codec information first, just ftyp then moov before the main stream. This access point is used for ffmpeg to connect to when making recordings.
+* HTTP service at http://\<base address\>/h which does not send the codec information first, just ftyp then moov before the main stream. This access point is used for ffmpeg to connect to when making recordings.
