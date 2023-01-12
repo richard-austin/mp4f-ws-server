@@ -27,13 +27,15 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     // *** USER PARAMETERS ***
     let verbose = false;
     // let verbose = true; // enable for saturating the console ..
-    let buffering_sec = 1.2; // use some reasonable value
+    let buffering_sec = 0.8; // use some reasonable value
 
     let buffering_sec_seek = buffering_sec * 0.9;
     // ..seek the stream if it's this much away or
     // from the last available timestamp
     let buffering_sec_seek_distance = buffering_sec * 0.5;
     // .. jump to this distance from the last avail. timestamp
+
+    let lastSeekTime = undefined
 
     // *** INTERNAL PARAMETERS ***
     // set mimetype and codec
@@ -113,6 +115,11 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
             let latest = stream_live.duration;
             if ((stream_live.duration >= buffering_sec) &&
                 ((latest - stream_live.currentTime) > buffering_sec_seek)) {
+                let thisSeekTime = Date.now()
+                if(lastSeekTime !== undefined && (thisSeekTime - lastSeekTime  < 10000 )) {
+                    console.log("Last seek time was ", (thisSeekTime-lastSeekTime)/1000," increasing buffering seconds from ", buffering_sec," to " ,buffering_sec *= 1.2);
+                }
+                lastSeekTime = thisSeekTime;
                 let controls = stream_live.controls
                 stream_live.controls = false;
                 console.log("seek from ", stream_live.currentTime, " to ", latest);
