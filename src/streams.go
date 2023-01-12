@@ -135,9 +135,9 @@ func (s *Streams) getMoov(suuid string) (error, Packet) {
 	var retVal error = nil
 	stream, ok := s.StreamMap[suuid]
 	if !ok {
-		retVal = fmt.Errorf("Stream ", suuid, " not found")
+		retVal = fmt.Errorf("stream %s not found", suuid)
 	} else if stream.moov.pckt == nil {
-		retVal = fmt.Errorf("No moov for stream ", suuid)
+		retVal = fmt.Errorf("no moov for stream %s", suuid)
 	}
 
 	return retVal, stream.moov
@@ -145,7 +145,7 @@ func (s *Streams) getMoov(suuid string) (error, Packet) {
 
 func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
 	if s.StreamMap[suuid].moov.pckt == nil {
-		err = fmt.Errorf("Cannot get codecs, no moov data")
+		err = fmt.Errorf("cannot get codecs, no moov data")
 		return
 	}
 	names := []string{"trak", "mdia", "minf", "stbl", "stsd", "avc1", "avcC"}
