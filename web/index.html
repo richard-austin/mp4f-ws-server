@@ -117,7 +117,7 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
                 ((latest - stream_live.currentTime) > buffering_sec_seek)) {
                 let thisSeekTime = Date.now()
                 if(lastSeekTime !== undefined && (thisSeekTime - lastSeekTime  < 10000 )) {
-                    console.log("Last seek time was ", (thisSeekTime-lastSeekTime)/1000," increasing buffering seconds from ", buffering_sec," to " ,buffering_sec *= 1.2);
+                    console.log("Last seek time was ", (thisSeekTime-lastSeekTime)/1000," increasing buffering seconds seek from ", buffering_sec_seek," to " ,buffering_sec_seek *= 1.2);
                 }
                 lastSeekTime = thisSeekTime;
                 let controls = stream_live.controls

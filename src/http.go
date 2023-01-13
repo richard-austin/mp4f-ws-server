@@ -85,6 +85,8 @@ func serveHTTP() {
 			log.Infof("Cannot add %s, there is already an existing stream with that id", suuid)
 			return
 		}
+
+		log.Infof("Input connected for %s", suuid)
 		readCloser := req.Body
 
 		streams.addInput(suuid)
@@ -207,7 +209,7 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 			bytes, err := w.Write(data.pckt)
 			if err != nil {
 				// Warning only as it could be because the client disconnected
-				log.Warnf("Error writing to client for %s:= %s", suuid, err.Error())
+				log.Warnf("writing to client for %s:= %s", suuid, err.Error())
 				break
 			}
 			log.Tracef("Data sent to http client for %s:- %d bytes", suuid, bytes)
@@ -219,7 +221,7 @@ func ws(ws *websocket.Conn) {
 	defer func() {
 		err := ws.Close()
 		if err != nil {
-			log.Errorf("Error closing websocket %s", err.Error())
+			log.Warnf("closing websocket:- %s", err.Error())
 		}
 	}()
 	suuid := ws.Request().FormValue("suuid")
@@ -294,12 +296,12 @@ func ws(ws *websocket.Conn) {
 
 		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
-			log.Warnf("Error calling SetWriteDeadline:- %s", err.Error())
+			log.Warnf("calling SetWriteDeadline:- %s", err.Error())
 			return
 		}
 		err = websocket.Message.Send(ws, data.pckt)
 		if err != nil {
-			log.Warnf("Error calling Send:- %s", err.Error())
+			log.Warnf("calling Send:- %s", err.Error())
 			return
 		}
 		log.Tracef("Data sent to client %d bytes", len(data.pckt))
