@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
@@ -42,9 +43,16 @@ func ReadBox(readCloser io.ReadCloser, data []byte, queue chan Packet) (numOfByt
 	}
 	var boxLen = binary.BigEndian.Uint32(data[0:4])
 	if boxLen < uint32(numOfByte) {
+		// The moov atom is tagged onto ftyp
 		var tmp = make([]byte, uint32(numOfByte)-boxLen)
 		copy(tmp, data[boxLen:uint32(numOfByte)-boxLen])
-		queue <- NewPacket(tmp)
+		moovLen := binary.BigEndian.Uint32(tmp[0:4])
+		if int(moovLen) > len(tmp) {
+			log.Errorf("Error: moov length (%d) is greater then the length of the message containing it (%d)", moovLen, len(tmp))
+			err = fmt.Errorf("error: moov length (%d) is greater then the length of the message containing it (%d)", moovLen, len(tmp))
+			return
+		}
+		queue <- NewPacket(tmp[:moovLen])
 		log.Infof("splitting packet boxLen = %d, numOfByte = %d\n", boxLen, numOfByte)
 		data = data[:boxLen]
 	}
@@ -198,7 +206,8 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 			started = true
 			bytes, err := w.Write(data.pckt)
 			if err != nil {
-				log.Errorf("Error writing to client for %s:= %s", suuid, err.Error())
+				// Warning only as it could be because the client disconnected
+				log.Warnf("Error writing to client for %s:= %s", suuid, err.Error())
 				break
 			}
 			log.Tracef("Data sent to http client for %s:- %d bytes", suuid, bytes)
@@ -223,6 +232,7 @@ func ws(ws *websocket.Conn) {
 	}
 	cuuid, ch := streams.addClient(suuid)
 	defer streams.deleteClient(suuid, cuuid)
+	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
 
 	// Send the header information (codecs, ftyp and moov)
 	var data Packet
@@ -284,12 +294,12 @@ func ws(ws *websocket.Conn) {
 
 		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
-			log.Errorf("Error calling SetWriteDeadline:- %s", err.Error())
+			log.Warnf("Error calling SetWriteDeadline:- %s", err.Error())
 			return
 		}
 		err = websocket.Message.Send(ws, data.pckt)
 		if err != nil {
-			log.Errorf("Error calling Send:- %s", err.Error())
+			log.Warnf("Error calling Send:- %s", err.Error())
 			return
 		}
 		log.Tracef("Data sent to client %d bytes", len(data.pckt))
