@@ -82,7 +82,7 @@ func serveHTTP() {
 		suuid := req.FormValue("suuid")
 		_, hasEntry := streams.StreamMap[suuid]
 		if hasEntry {
-			log.Infof("Cannot add %s, there is already an existing stream with that id", suuid)
+			log.Errorf("Cannot add %s, there is already an existing stream with that id", suuid)
 			return
 		}
 
