@@ -22,7 +22,11 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     Your browser does not support the video tag.
 </video>
 </body>
-
+<style>
+    /*video::-webkit-media-controls {*/
+    /*    display:none !important;*/
+    /*}*/
+</style>
 <script>
     // *** USER PARAMETERS ***
     let verbose = false;
@@ -55,8 +59,6 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     let cc = 0;
 
     let source_buffer; // source_buffer instance
-
-    let pass = 0;
 
     // *** MP4 Box manipulation functions ***
     // taken from here: https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragmented-live-mp4-stream/
@@ -110,25 +112,22 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
 
             source_buffer.addEventListener("updateend", loadPacket);
         } else {
-
             // keep the latency to minimum
             let latest = stream_live.duration;
             if ((stream_live.duration >= buffering_sec) &&
                 ((latest - stream_live.currentTime) > buffering_sec_seek)) {
-                let thisSeekTime = Date.now()
-                if(lastSeekTime !== undefined && (thisSeekTime - lastSeekTime  < 10000 )) {
-                    console.log("Last seek time was ", (thisSeekTime-lastSeekTime)/1000," increasing buffering seconds seek from ", buffering_sec_seek," to " ,buffering_sec_seek *= 1.2);
-                }
-                lastSeekTime = thisSeekTime;
-                let controls = stream_live.controls
-                stream_live.controls = false;
+               // let thisSeekTime = Date.now()
+                // if(lastSeekTime !== undefined && (thisSeekTime - lastSeekTime  < 10000 )) {
+                //     console.log("Last seek time was ", (thisSeekTime-lastSeekTime)/1000," increasing buffering seconds seek from ", buffering_sec_seek," to " ,buffering_sec_seek *= 1.2);
+                // }
+                // lastSeekTime = thisSeekTime;
+
                 console.log("seek from ", stream_live.currentTime, " to ", latest);
                 df = (stream_live.duration - stream_live.currentTime); // this much away from the last available frame
                 if ((df > buffering_sec_seek)) {
                     seek_to = stream_live.duration - buffering_sec_seek_distance;
-                    stream_live.currentTime = seek_to;
+                     stream_live.currentTime = seek_to;
                 }
-                stream_live.controls = controls;
             }
 
             data = arr;
@@ -190,10 +189,13 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
         ms.addEventListener('sourceopen', opened, false);
 
         // get reference to video
-        stream_live = document.getElementById('stream_live');
-
+        stream_live  = document.getElementById('stream_live');
+        //stream_live.latencyHint = 0.075
         // set mediasource as source of video
         stream_live.src = window.URL.createObjectURL(ms);
+        // stream_live.controls = false;
+        // stream_live.addEventListener("mouseover", () => {stream_live.controls=true;});
+        // stream_live.addEventListener("mouseout", () => {stream_live.controls=false;});
     }
 
 

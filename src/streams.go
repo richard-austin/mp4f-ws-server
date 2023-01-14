@@ -215,12 +215,14 @@ func (p Packet) isKeyFrame() (retVal bool) {
 	retVal = false
 	traf := getSubBox(p, "traf")
 	if traf == nil {
-		retVal = false
+		log.Warnf("traf was nil in isKeyFrame")
+		return
 	}
 
 	trun := getSubBox(Packet{pckt: traf}, "trun")
 	if trun == nil {
-		retVal = false
+		log.Warnf("trun was nil in isKeyFrame")
+		return
 	}
 	flags := trun[10:14]
 
