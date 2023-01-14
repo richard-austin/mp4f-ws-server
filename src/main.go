@@ -24,5 +24,8 @@ func main() {
 		Compress:   true,
 	}
 	log.SetOutput(io.MultiWriter(os.Stdout, lumberjackLogger))
+	cameras := loadConfig()
+	_ = cameras
+	ffmpegFeed()
 	serveHTTP()
 }
