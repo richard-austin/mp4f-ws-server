@@ -6,21 +6,47 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
 -->
 
 
-<html>
+<html lang="eng">
+<meta http-equiv="Expires" content="0">
+<meta http-equiv="Last-Modified" content="0">
+<meta http-equiv="Cache-Control" content="no-cache, mustrevalidate">
+<meta http-equiv="Pragma" content="no-cache">
+
+<link rel="stylesheet" href="web/css/bootstrap.min.css">
+<script src="web/js/bootstrap.min.js"></script>
+<script src="web/js/bootstrap.bundle.js"></script>
 <head>
     <title>WebSocket MSE demo</title>
 </head>
 
 <body>
+
+
 <!-- muted attribute required for chrome autoplay-->
 <!--        <audio id="stream_live" controls autoplay>Your browser does not support the audio tag.</audio>-->
-<video id="stream_live"
-       width="640" height="480"
-       controls autoplay
-       muted="muted"
-       preload="auto">
-    Your browser does not support the video tag.
-</video>
+<h2 align=center>
+    Stream = {{ .suuid }}
+</h2>
+<div class="container">
+    <div class="row">
+        <div class="col-3">
+            <div class="list-group">
+                {{ range $k, $v := .suuidMap }}
+                    <a href="/{{ $v }}" id="{{ $v }}" class="list-group-item list-group-item-action">{{ $k }}</a>
+                {{ end }}
+            </div>
+        </div>
+        <div class="col">
+            <video id="stream_live"
+                   style="width: 100%"
+                   controls autoplay
+                   preload="auto">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+</div>
+
 </body>
 <style>
     /*video::-webkit-media-controls {*/
@@ -106,7 +132,7 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
             source_buffer = ms.addSourceBuffer(codecPars);
 
             // https://developer.mozilla.org/en-US/docs/Web/API/source_buffer/mode
-       //     let myMode = source_buffer.mode;
+            //     let myMode = source_buffer.mode;
             source_buffer.mode = 'sequence';
             // source_buffer.mode = 'segments';  // TODO: should we use this instead?
 
@@ -116,7 +142,7 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
             let latest = stream_live.duration;
             if ((stream_live.duration >= buffering_sec) &&
                 ((latest - stream_live.currentTime) > buffering_sec_seek)) {
-               // let thisSeekTime = Date.now()
+                // let thisSeekTime = Date.now()
                 // if(lastSeekTime !== undefined && (thisSeekTime - lastSeekTime  < 10000 )) {
                 //     console.log("Last seek time was ", (thisSeekTime-lastSeekTime)/1000," increasing buffering seconds seek from ", buffering_sec_seek," to " ,buffering_sec_seek *= 1.2);
                 // }
@@ -126,7 +152,7 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
                 df = (stream_live.duration - stream_live.currentTime); // this much away from the last available frame
                 if ((df > buffering_sec_seek)) {
                     seek_to = stream_live.duration - buffering_sec_seek_distance;
-                     stream_live.currentTime = seek_to;
+                    stream_live.currentTime = seek_to;
                 }
             }
 
@@ -177,8 +203,13 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     function opened() { // MediaSource object is ready to go
         // https://developer.mozilla.org/en-US/docs/Web/API/MediaSource/duration
         // ws = new WebSocket("ws://localhost:8089/ws/");
+        let urlStr = window.location.href
+        let url = new URL(urlStr);
+        let suuid = {{.suuid}}
+        if (suuid === undefined)
+            suuid = "stream1";
         let host = window.location.host
-        ws = new WebSocket("ws://" + host + "/ws/s1?suuid=stream1");
+        ws = new WebSocket("ws://" + host + "/ws/stream?suuid=" + suuid);
         ws.binaryType = "arraybuffer";
         ws.onmessage = function (event) {
             putPacket(event.data);
@@ -189,13 +220,18 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
         ms.addEventListener('sourceopen', opened, false);
 
         // get reference to video
-        stream_live  = document.getElementById('stream_live');
+        stream_live = document.getElementById('stream_live');
         //stream_live.latencyHint = 0.075
         // set mediasource as source of video
         stream_live.src = window.URL.createObjectURL(ms);
         // stream_live.controls = false;
         // stream_live.addEventListener("mouseover", () => {stream_live.controls=true;});
         // stream_live.addEventListener("mouseout", () => {stream_live.controls=false;});
+        let activeLink = document.getElementById({{.suuid}});
+        console.log(activeLink);
+        console.log(activeLink.classList);
+        activeLink.classList.add("active");
+
     }
 
 

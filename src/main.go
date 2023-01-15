@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 )
 
+var cameras *Cameras
+
 func main() {
 	var customFormatter = log.TextFormatter{}
 	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
@@ -24,8 +26,8 @@ func main() {
 		Compress:   true,
 	}
 	log.SetOutput(io.MultiWriter(os.Stdout, lumberjackLogger))
-	cameras := loadConfig()
+	cameras = loadConfig()
 	_ = cameras
-	ffmpegFeed()
+	ffmpegFeed(cameras)
 	serveHTTP()
 }

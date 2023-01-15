@@ -25,13 +25,13 @@
           "trigger_recording_on": ""
         },
         "netcam_uri": "rtsp://192.168.0.23:554/11",
-        "nms_uri": "rtmp://localhost:1935/nms/stream1",
+        "nms_uri": "http://localhost:8081/live/stream?suuid=stream1",
         "recording": {
           "enabled": true,
           "location": "rec1",
           "uri": "http://localhost:8084/recording/rec1/"
         },
-        "uri": "http://localhost:8009/nms/stream1.flv",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream1",
         "video_height": 1440,
         "video_width": 2560
       },
@@ -47,13 +47,13 @@
           "trigger_recording_on": ""
         },
         "netcam_uri": "rtsp://192.168.0.23:554/12",
-        "nms_uri": "rtmp://localhost:1935/nms/stream2",
+        "nms_uri":  "http://localhost:8081/live/stream?suuid=stream2",
         "recording": {
           "enabled": false,
           "location": "rec2",
           "uri": "http://localhost:8084/recording/rec2/"
         },
-        "uri": "http://localhost:8009/nms/stream2.flv",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream2",
         "video_height": 448,
         "video_width": 800
       }
@@ -85,13 +85,13 @@
           "trigger_recording_on": ""
         },
         "netcam_uri": "rtsp://192.168.0.26:554/11",
-        "nms_uri": "rtmp://localhost:1935/nms/stream3",
+        "nms_uri":  "http://localhost:8081/live/stream?suuid=stream3",
         "recording": {
           "enabled": true,
           "location": "rec3",
           "uri": "http://localhost:8084/recording/rec3/"
         },
-        "uri": "http://localhost:8009/nms/stream3.flv",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream3",
         "video_height": 1080,
         "video_width": 1920
       },
@@ -107,13 +107,13 @@
           "trigger_recording_on": "camera2.stream3"
         },
         "netcam_uri": "rtsp://192.168.0.26:554/12",
-        "nms_uri": "rtmp://localhost:1935/nms/stream4",
+        "nms_uri": "http://localhost:8081/live/stream?suuid=stream4",
         "recording": {
           "enabled": true,
           "location": "rec4",
           "uri": "http://localhost:8084/recording/rec4/"
         },
-        "uri": "http://localhost:8009/nms/stream4.flv",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream4",
         "video_height": 352,
         "video_width": 640
       }

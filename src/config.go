@@ -7,6 +7,7 @@ import (
 )
 
 type StreamC struct {
+	Descr           string `json:"descr"`
 	AudioBitRate    string `json:"audio_bitrate"`
 	AudioEncoding   string `json:"audio_encoding"`
 	AudioSampleRate int    `json:"audio_sample_rate"`
@@ -31,12 +32,23 @@ type StreamC struct {
 }
 
 type Camera struct {
+	Name    string             `json:"name"`
 	Address string             `json:"address"`
 	Streams map[string]StreamC `json:"streams"`
 }
 
 type Cameras struct {
 	Cameras map[string]Camera `json:"{}"`
+}
+
+func (c *Cameras) Suuids() (suuids map[string]string) {
+	suuids = map[string]string{}
+	for _, camera := range c.Cameras {
+		for k, stream := range camera.Streams {
+			suuids[camera.Name+" "+stream.Descr] = k
+		}
+	}
+	return
 }
 
 func loadConfig() *Cameras {

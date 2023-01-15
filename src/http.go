@@ -63,17 +63,32 @@ func ReadBox(readCloser io.ReadCloser, data []byte, queue chan Packet) (numOfByt
 func serveHTTP() {
 	router := gin.Default()
 	gin.SetMode(gin.DebugMode)
-	router.LoadHTMLFiles("web/index.html")
-
-	// For web page
+	router.LoadHTMLFiles("web/index.gohtml")
+	suuids := cameras.Suuids()
+	// Get the name of the first stream
+	var first Camera
+	var firstStream string
+	for _, first = range cameras.Cameras {
+		for firstStream, _ = range first.Streams {
+			break
+		}
+		break
+	}
+	// For web page without suuid
 	router.GET("/", func(c *gin.Context) {
-		//path, err := os.Getwd()
-		//if err != nil {
-		//	log.Println(err)
-		//}
-		//fmt.Println(path)
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			//	"suuid": c.Param("suuid"),
+
+		c.HTML(http.StatusOK, "index.gohtml", gin.H{
+			"suuidMap": suuids,
+			"suuid":    firstStream,
+		})
+	})
+
+	// For web page with suuid
+	router.GET("/:suuid", func(c *gin.Context) {
+
+		c.HTML(http.StatusOK, "index.gohtml", gin.H{
+			"suuidMap": suuids,
+			"suuid":    c.Param("suuid"),
 		})
 	})
 	// For ffmpeg to write to
@@ -146,6 +161,7 @@ func serveHTTP() {
 			log.Tracef("%d bytes received", numOfByte)
 		}
 	})
+	router.StaticFS("/web", http.Dir("web"))
 
 	// For http connections from ffmpeg to read from (for recordings)
 	// This does not send the codec info ahead of ftyp and moov
