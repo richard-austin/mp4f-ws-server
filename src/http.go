@@ -4,9 +4,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -43,10 +43,17 @@ func ReadBox(readCloser io.ReadCloser, data []byte, queue chan Packet) (numOfByt
 	}
 	var boxLen = binary.BigEndian.Uint32(data[0:4])
 	if boxLen < uint32(numOfByte) {
+		// The moov atom is tagged onto ftyp
 		var tmp = make([]byte, uint32(numOfByte)-boxLen)
 		copy(tmp, data[boxLen:uint32(numOfByte)-boxLen])
-		queue <- NewPacket(tmp)
-		fmt.Printf("splitting packet boxLen = %d, numOfByte = %d\n", boxLen, numOfByte)
+		moovLen := binary.BigEndian.Uint32(tmp[0:4])
+		if int(moovLen) > len(tmp) {
+			log.Errorf("Error: moov length (%d) is greater then the length of the message containing it (%d)", moovLen, len(tmp))
+			err = fmt.Errorf("error: moov length (%d) is greater then the length of the message containing it (%d)", moovLen, len(tmp))
+			return
+		}
+		queue <- NewPacket(tmp[:moovLen])
+		log.Infof("splitting packet boxLen = %d, numOfByte = %d\n", boxLen, numOfByte)
 		data = data[:boxLen]
 	}
 	numOfByte = int(boxLen)
@@ -56,17 +63,32 @@ func ReadBox(readCloser io.ReadCloser, data []byte, queue chan Packet) (numOfByt
 func serveHTTP() {
 	router := gin.Default()
 	gin.SetMode(gin.DebugMode)
-	router.LoadHTMLFiles("web/index.html")
-
-	// For web page
+	router.LoadHTMLFiles("web/index.gohtml")
+	suuids := cameras.Suuids()
+	// Get the name of the first stream
+	var first Camera
+	var firstStream string
+	for _, first = range cameras.Cameras {
+		for firstStream, _ = range first.Streams {
+			break
+		}
+		break
+	}
+	// For web page without suuid
 	router.GET("/", func(c *gin.Context) {
-		//path, err := os.Getwd()
-		//if err != nil {
-		//	log.Println(err)
-		//}
-		//fmt.Println(path)
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			//	"suuid": c.Param("suuid"),
+
+		c.HTML(http.StatusOK, "index.gohtml", gin.H{
+			"suuidMap": suuids,
+			"suuid":    firstStream,
+		})
+	})
+
+	// For web page with suuid
+	router.GET("/:suuid", func(c *gin.Context) {
+
+		c.HTML(http.StatusOK, "index.gohtml", gin.H{
+			"suuidMap": suuids,
+			"suuid":    c.Param("suuid"),
 		})
 	})
 	// For ffmpeg to write to
@@ -75,9 +97,11 @@ func serveHTTP() {
 		suuid := req.FormValue("suuid")
 		_, hasEntry := streams.StreamMap[suuid]
 		if hasEntry {
-			log.Printf("Cannot add %s, there is already an existing stream with that id", suuid)
+			log.Errorf("Cannot add %s, there is already an existing stream with that id", suuid)
 			return
 		}
+
+		log.Infof("Input connected for %s", suuid)
 		readCloser := req.Body
 
 		streams.addInput(suuid)
@@ -90,7 +114,7 @@ func serveHTTP() {
 		// Set up the stream ready for connection from client, put in the ftyp, moov and codec data
 		numOfByte, err := ReadBox(readCloser, data, queue)
 		if err != nil {
-			log.Println("Error reading the ftyp data for stream ", suuid, ":- ", err.Error())
+			log.Errorf("Error reading the ftyp data for stream %s:- %s", suuid, err.Error())
 			return
 		}
 
@@ -102,7 +126,7 @@ func serveHTTP() {
 
 		numOfByte, err = ReadBox(readCloser, data, queue)
 		if err != nil {
-			log.Println("Error reading the moov data for stream ", suuid, ":- ", err.Error())
+			log.Errorf("Error reading the moov data for stream %s:- %s", suuid, err.Error())
 			return
 		}
 
@@ -121,18 +145,23 @@ func serveHTTP() {
 		for {
 			data = data[:33000]
 			numOfByte, err = readCloser.Read(data)
+			if err != nil {
+				log.Errorf("Error reading the data feed for stream %s:- %s", suuid, err.Error())
+				break
+			}
 			d = NewPacket(data[:numOfByte])
 			err = streams.put(suuid, d)
 
 			if err != nil {
-				log.Println("Error: " + err.Error())
+				log.Errorf("Error putting the packet into stream %s:- %s", suuid, err.Error())
 				break
 			} else if numOfByte == 0 {
 				break
 			}
-			//log.Println(numOfByte, " bytes received")
+			log.Tracef("%d bytes received", numOfByte)
 		}
 	})
+	router.StaticFS("/web", http.Dir("web"))
 
 	// For http connections from ffmpeg to read from (for recordings)
 	// This does not send the codec info ahead of ftyp and moov
@@ -155,33 +184,34 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	defer func() { r.Close = true }()
 	suuid := r.FormValue("suuid")
 
-	log.Println("Request", suuid)
-	//if !Config.ext(suuid) {
-	//	log.Println("Stream Not Found")
-	//	return
-	//}
+	log.Infof("Request %s", suuid)
 	cuuid, ch := streams.addClient(suuid)
-	log.Printf("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
+	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
 	defer streams.deleteClient(suuid, cuuid)
-	//err = websocket.Message.Send(ws, append([]byte{9}, "codecs"...))
 
 	err, data := streams.getFtyp(suuid)
 	if err != nil {
-		log.Printf("Error getting ftyp: %s", err.Error())
-	}
-	_, err = w.Write(data.pckt)
-	if err != nil {
-		log.Printf("Error writing ftyp: %s", err.Error())
+		log.Errorf("Error getting ftyp: %s", err.Error())
 		return
 	}
+	bytes, err := w.Write(data.pckt)
+	if err != nil {
+		log.Errorf("Error writing ftyp: %s", err.Error())
+		return
+	}
+	log.Tracef("Sent ftyp through http to %s:- %d bytes", suuid, bytes)
+
 	err, data = streams.getMoov(suuid)
 	if err != nil {
-		log.Printf("Error getting moov: %s", err.Error())
+		log.Errorf("Error getting moov: %s", err.Error())
+		return
 	}
-	_, err = w.Write(data.pckt)
+	bytes, err = w.Write(data.pckt)
 	if err != nil {
-		log.Printf("Error writing moov: %s", err.Error())
+		log.Errorf("Error writing moov: %s", err.Error())
+		return
 	}
+	log.Tracef("Sent moov through http to %s:- %d bytes", suuid, bytes)
 
 	started := false
 	for {
@@ -192,10 +222,13 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 			continue
 		} else {
 			started = true
-			_, err = w.Write(data.pckt)
+			bytes, err := w.Write(data.pckt)
 			if err != nil {
+				// Warning only as it could be because the client disconnected
+				log.Warnf("writing to client for %s:= %s", suuid, err.Error())
 				break
 			}
+			log.Tracef("Data sent to http client for %s:- %d bytes", suuid, bytes)
 		}
 	}
 }
@@ -204,52 +237,57 @@ func ws(ws *websocket.Conn) {
 	defer func() {
 		err := ws.Close()
 		if err != nil {
-			_ = fmt.Errorf("Error closing websocket %s", err.Error())
+			log.Warnf("closing websocket:- %s", err.Error())
 		}
 	}()
 	suuid := ws.Request().FormValue("suuid")
 
-	log.Println("Request", suuid)
-	//if !Config.ext(suuid) {
-	//	log.Println("Stream Not Found")
-	//	return
-	//}
-	err := ws.SetWriteDeadline(time.Now().Add(50 * time.Second))
+	log.Infof("Request %s", suuid)
+	err := ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if err != nil {
+		log.Errorf("Error in SetWriteDeadline %s", err.Error())
+		return
+	}
 	cuuid, ch := streams.addClient(suuid)
 	defer streams.deleteClient(suuid, cuuid)
-	//err = websocket.Message.Send(ws, init)
+	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
+
+	// Send the header information (codecs, ftyp and moov)
 	var data Packet
 	err, data = streams.getCodecs(suuid)
 	if err != nil {
-		log.Printf("Error getting codecs: %s", err.Error())
+		log.Errorf("Error getting codecs: %s", err.Error())
 		return
 	}
 	err = websocket.Message.Send(ws, data.pckt)
 	if err != nil {
-		log.Printf("Error writing codecs: %s", err.Error())
+		log.Errorf("Error writing codecs: %s", err.Error())
 		return
 	}
+	log.Tracef("Sent codecs through to %s:- %s", suuid, string(data.pckt))
+
 	err, data = streams.getFtyp(suuid)
 	if err != nil {
-		log.Printf("Error getting ftyp: %s", err.Error())
+		log.Errorf("Error getting ftyp: %s", err.Error())
 		return
 	}
 	err = websocket.Message.Send(ws, data.pckt)
 	if err != nil {
-		log.Printf("Error writing ftyp: %s", err.Error())
+		log.Errorf("Error writing ftyp: %s", err.Error())
 		return
 	}
+	log.Tracef("Sent ftyp through to %s:- %d bytes", suuid, len(data.pckt))
 
 	err, data = streams.getMoov(suuid)
 	if err != nil {
-		log.Printf("Error getting moov: %s", err.Error())
+		log.Errorf("Error getting moov: %s", err.Error())
 	}
 	err = websocket.Message.Send(ws, data.pckt)
 	if err != nil {
-		log.Printf("Error writing moov: %s", err.Error())
+		log.Errorf("Error writing moov: %s", err.Error())
 	}
+	log.Tracef("Sent moov through to %s:- %d bytes", suuid, len(data.pckt))
 
-	// Main loop to send moof and mdat atoms
 	go func() {
 		for {
 			var message string
@@ -261,6 +299,7 @@ func ws(ws *websocket.Conn) {
 		}
 	}()
 
+	// Main loop to send moof and mdat atoms
 	started := false
 	for {
 		var err error
@@ -271,14 +310,16 @@ func ws(ws *websocket.Conn) {
 			started = true
 		}
 
-		//log.Println("Data received ", len(data.pckt), " bytes")
 		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
+			log.Warnf("calling SetWriteDeadline:- %s", err.Error())
 			return
 		}
 		err = websocket.Message.Send(ws, data.pckt)
 		if err != nil {
+			log.Warnf("calling Send:- %s", err.Error())
 			return
 		}
+		log.Tracef("Data sent to client %d bytes", len(data.pckt))
 	}
 }

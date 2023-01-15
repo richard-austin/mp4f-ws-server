@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"sync"
 )
 
@@ -156,14 +156,13 @@ func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
 	for i, n := range names {
 		val = getSubBox(Packet{val}, n)
 		if val != nil {
-			log.Println("Found ", n)
+			log.Tracef("Found %s", n)
 			if i == 0 {
 				// Save the length of the trak
 				trakLen = int(binary.BigEndian.Uint32(val[:4]))
 			}
 		} else {
-			log.Printf("Error: No %s in moov", n)
-			err = fmt.Errorf("No %s in moov", n)
+			log.Errorf("Error: No %s in moov", n)
 			break
 		}
 	}
@@ -178,9 +177,9 @@ func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
 	for _, n := range names2 {
 		val = getSubBox(Packet{val}, n)
 		if val != nil {
-			log.Println("Found ", n)
+			log.Tracef("Found %s", n)
 		} else {
-			log.Printf("No second %s in moov. No audio present", n)
+			log.Tracef("No second %s in moov. No audio present", n)
 			break
 		}
 	}
@@ -216,12 +215,14 @@ func (p Packet) isKeyFrame() (retVal bool) {
 	retVal = false
 	traf := getSubBox(p, "traf")
 	if traf == nil {
-		retVal = false
+		log.Warnf("traf was nil in isKeyFrame")
+		return
 	}
 
 	trun := getSubBox(Packet{pckt: traf}, "trun")
 	if trun == nil {
-		retVal = false
+		log.Warnf("trun was nil in isKeyFrame")
+		return
 	}
 	flags := trun[10:14]
 
@@ -249,7 +250,7 @@ func pseudoUUID() (uuid string) {
 	b := make([]byte, pseudoUUIDLen)
 	_, err := rand.Read(b)
 	if err != nil {
-		fmt.Println("Error: ", err)
+		log.Errorf("Error in pseudoUUID: %s", err.Error())
 		return
 	}
 	uuid = fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
