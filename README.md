@@ -65,3 +65,6 @@ The parameters in cameras.json are as described below.
             *  **netcam_uri** The URL of this stream from the net camera.
             *  **client_uri** The URL ffmpeg must use to connect to the server input side. This is generally of the form [http://localhost:8081/live/stream?suuid=stream(*n*)]
             *  **uri** The websocket URL which MSE connects to. This is generally of the form [http://my-IP-address:8081/ws/stream?suuid=stream(*n*)]
+
+## Setting up
+
