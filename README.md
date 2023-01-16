@@ -5,8 +5,8 @@
 * mp4f streaming for low latency
 * ffmpeg links this server with RTSP sources, giving flexiblity in source format and transcoding
 * Basic web page to check the streams
-* Stream url with codecs preamble for easy etup of MSE clients
-* Stream url without codecs preamle for other clients (such as ffmpeg)
+* Stream url with codecs preamble for easy setup of MSE clients
+* Stream url without codecs preamble for other clients (such as ffmpeg)
 
 ### Configuration
 The configuration file is cameras.json, as shown below. There is a section for each camera with one or more streams (RTSP sources) supported for each camera.
