@@ -19,7 +19,7 @@ func ffmpegFeed(cameras *Cameras) {
 					} else {
 						audio = "-c:a aac -ar " + stream.AudioBitRate
 					}
-					cmdStr := fmt.Sprintf("/usr/bin/ffmpeg -hide_banner -loglevel error -stimeout 1000000 -fflags nobuffer -rtsp_transport tcp -i  %s -c:v copy %s -async 1 -movflags empty_moov+omit_tfhd_offset+frag_keyframe+default_base_moof -frag_size 10 -preset superfast -tune zerolatency -f mp4 %s", stream.NetcamUri, audio, stream.NMSUri)
+					cmdStr := fmt.Sprintf("/usr/bin/ffmpeg -hide_banner -loglevel error -stimeout 1000000 -fflags nobuffer -rtsp_transport tcp -i  %s -c:v copy %s -async 1 -movflags empty_moov+omit_tfhd_offset+frag_keyframe+default_base_moof -frag_size 10 -preset superfast -tune zerolatency -f mp4 %s", stream.NetcamUri, audio, stream.ClientUri)
 					cmd := exec.Command("bash", "-c", cmdStr)
 					stdout, err := cmd.Output()
 

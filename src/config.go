@@ -7,15 +7,11 @@ import (
 )
 
 type StreamC struct {
-	Descr           string `json:"descr"`
-	AudioBitRate    string `json:"audio_bitrate"`
-	AudioEncoding   string `json:"audio_encoding"`
-	AudioSampleRate int    `json:"audio_sample_rate"`
-	NetcamUri       string `json:"netcam_uri"`
-	NMSUri          string `json:"nms_uri"`
-	URI             string `json:"uri"`
-	VideoHeight     int    `json:"video_height"`
-	VideoWidth      int    `json:"video_width"`
+	Descr        string `json:"descr"`
+	AudioBitRate string `json:"audio_bitrate"`
+	NetcamUri    string `json:"netcam_uri"`
+	ClientUri    string `json:"client_uri"`
+	URI          string `json:"uri"`
 }
 
 type Camera struct {

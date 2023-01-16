@@ -4,22 +4,18 @@
     "streams": {
       "stream1": {
         "audio_bitrate": "16000",
-        "audio_encoding": "G711",
-        "audio_sample_rate": 8000,
         "descr": "HD",
          "netcam_uri": "rtsp://192.168.0.23:554/11",
-        "nms_uri": "http://localhost:8081/live/stream?suuid=stream1",
+        "client_uri": "http://localhost:8081/live/stream?suuid=stream1",
         "uri": "http://localhost:8081/ws/stream/suuid=stream1",
         "video_height": 1440,
         "video_width": 2560
       },
       "stream2": {
         "audio_bitrate": "0",
-        "audio_encoding": "G711",
-        "audio_sample_rate": 8000,
         "descr": "SD",
         "netcam_uri": "rtsp://192.168.0.23:554/12",
-        "nms_uri":  "http://localhost:8081/live/stream?suuid=stream2",
+        "client_uri":  "http://localhost:8081/live/stream?suuid=stream2",
         "uri": "http://localhost:8081/ws/stream/suuid=stream2",
         "video_height": 448,
         "video_width": 800
@@ -31,22 +27,18 @@
     "streams": {
       "stream3": {
         "audio_bitrate": "0",
-        "audio_encoding": "G711",
-        "audio_sample_rate": 0,
         "descr": "HD",
         "netcam_uri": "rtsp://192.168.0.26:554/11",
-        "nms_uri":  "http://localhost:8081/live/stream?suuid=stream3",
+        "client_uri":  "http://localhost:8081/live/stream?suuid=stream3",
         "uri": "http://localhost:8081/ws/stream/suuid=stream3",
         "video_height": 1080,
         "video_width": 1920
       },
       "stream4": {
         "audio_bitrate": "0",
-        "audio_encoding": "G711",
-        "audio_sample_rate": 0,
-        "descr": "SD",
+         "descr": "SD",
         "netcam_uri": "rtsp://192.168.0.26:554/12",
-        "nms_uri": "http://localhost:8081/live/stream?suuid=stream4",
+        "client_uri": "http://localhost:8081/live/stream?suuid=stream4",
         "uri": "http://localhost:8081/ws/stream/suuid=stream4",
         "video_height": 352,
         "video_width": 640
