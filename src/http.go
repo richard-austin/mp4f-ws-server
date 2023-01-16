@@ -87,8 +87,9 @@ func serveHTTP() {
 	router.GET("/:suuid", func(c *gin.Context) {
 
 		c.HTML(http.StatusOK, "index.gohtml", gin.H{
-			"suuidMap": suuids,
-			"suuid":    c.Param("suuid"),
+			"suuidMap":            suuids,
+			"suuid":               c.Param("suuid"),
+			"defaultLatencyLimit": config.DefaultLatencyLimit,
 		})
 	})
 	// For ffmpeg to write to
@@ -174,7 +175,8 @@ func serveHTTP() {
 		handler := websocket.Handler(ws)
 		handler.ServeHTTP(c.Writer, c.Request)
 	})
-	err := router.Run(":8081")
+	addr := fmt.Sprintf(":%d", config.ServerPort)
+	err := router.Run(addr)
 	if err != nil {
 		log.Fatalln(err)
 	}

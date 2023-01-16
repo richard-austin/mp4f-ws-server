@@ -10,6 +10,7 @@ import (
 )
 
 var cameras *Cameras
+var config *Config
 
 func main() {
 	var customFormatter = log.TextFormatter{}
@@ -18,9 +19,11 @@ func main() {
 	var formatter log.Formatter = &customFormatter
 	log.SetFormatter(formatter)
 
-	log.SetLevel(log.InfoLevel)
+	config, cameras = loadConfig()
+	_, level := config.LogLevel()
+	log.SetLevel(level)
 	lumberjackLogger := &lumberjack.Logger{
-		Filename:   filepath.ToSlash("/var/log/mp4f-server/mp4f-server.log"),
+		Filename:   filepath.ToSlash(config.LogPath),
 		MaxSize:    5, // MB
 		MaxBackups: 10,
 		MaxAge:     30, // days
@@ -28,8 +31,6 @@ func main() {
 	}
 	gin.DefaultWriter = io.MultiWriter(os.Stdout, lumberjackLogger)
 	log.SetOutput(io.MultiWriter(os.Stdout, lumberjackLogger))
-	cameras = loadConfig()
-	_ = cameras
 	ffmpegFeed(cameras)
 	serveHTTP()
 }
