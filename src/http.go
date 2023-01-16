@@ -78,8 +78,9 @@ func serveHTTP() {
 	router.GET("/", func(c *gin.Context) {
 
 		c.HTML(http.StatusOK, "index.gohtml", gin.H{
-			"suuidMap": suuids,
-			"suuid":    firstStream,
+			"suuidMap":            suuids,
+			"suuid":               firstStream,
+			"defaultLatencyLimit": config.DefaultLatencyLimit,
 		})
 	})
 
