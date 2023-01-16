@@ -8,3 +8,58 @@
 * Stream url with codecs preamble for easy etup of MSE clients
 * Stream url without codecs preamle for other clients (such as ffmpeg)
 
+### Configuration
+The configuration file is cameras.json.
+
+```
+"camera1": {
+    "name": "Garden PTZ",
+    "streams": {
+      "stream1": {
+        "audio_bitrate": "16000",
+        "descr": "HD",
+         "netcam_uri": "rtsp://192.168.0.23:554/11",
+        "client_uri": "http://localhost:8081/live/stream?suuid=stream1",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream1",
+        "video_height": 1440,
+        "video_width": 2560
+      },
+      "stream2": {
+        "audio_bitrate": "0",
+        "descr": "SD",
+        "netcam_uri": "rtsp://192.168.0.23:554/12",
+        "client_uri":  "http://localhost:8081/live/stream?suuid=stream2",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream2",
+        "video_height": 448,
+        "video_width": 800
+      }
+    }
+  },
+  "camera2": {
+    "name": "Porch",
+    "streams": {
+      "stream3": {
+        "audio_bitrate": "0",
+        "descr": "HD",
+        "netcam_uri": "rtsp://192.168.0.26:554/11",
+        "client_uri":  "http://localhost:8081/live/stream?suuid=stream3",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream3",
+        "video_height": 1080,
+        "video_width": 1920
+      },
+      "stream4": {
+        "audio_bitrate": "0",
+         "descr": "SD",
+        "netcam_uri": "rtsp://192.168.0.26:554/12",
+        "client_uri": "http://localhost:8081/live/stream?suuid=stream4",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream4",
+        "video_height": 352,
+        "video_width": 640
+      }
+    }
+  }
+}
+
+```
+#### Parameters
+* 
