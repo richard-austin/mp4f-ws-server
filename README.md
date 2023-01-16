@@ -11,7 +11,8 @@
 ### Configuration
 The configuration file is cameras.json.
 
-```
+```json
+{
 "camera1": {
     "name": "Garden PTZ",
     "streams": {
