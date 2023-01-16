@@ -70,8 +70,8 @@ The parameters in cameras.json are as described below.
 
 ```
 git clone git@github.com:richard-austin/mp4f-ws-server.git
-sudo mkdir /var/log/mp4f-ws-server
-sudo chown your-user:your-user /var/log/mp4f-ws-server
+sudo mkdir /var/log/mp4f-server
+sudo chown your-user:your-user /var/log/mp4f-server
 cd mp4f-ws-server/src
 go build -o mp4f-ws-server
 cd ..
