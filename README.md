@@ -64,4 +64,8 @@ The configuration file is cameras.json, as shown below. There is a section for e
 ```
 The parameters in cameras.json are as described below.
 #### Parameters
-* **name** The camera name (its location). Th
+* **camera**(*n*)
+    * **name** The camera name. This followed by the the relevant stream description is the descriptive text on the stream selector buttons on the test web page.
+    * **streams**
+        * **stream**(*n*)
+            * **audio_bitrate** Audio resampling bitrate. As used in the -ar parameter of ffmpeg. Values can be 8000, 24000, 32000, 40000 or 48000. If the value 0 is used, audio will be disabed on the stream (-an on ffmpeg)
