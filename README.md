@@ -69,3 +69,6 @@ The parameters in cameras.json are as described below.
     * **streams**
         * **stream**(*n*)
             * **audio_bitrate** Audio resampling bitrate. As used in the -ar parameter of ffmpeg. Values can be 8000, 24000, 32000, 40000 or 48000. If the value 0 is used, audio will be disabed on the stream (-an on ffmpeg)
+            *  **descr** Description of stream (say HD or SD). This follows the camera name for the descriptive text on the stream selector buttons on the test web page.
+            *  **netcam_uri** The URL of this stream from the net camera.
+            *  **client_uri** TBC
