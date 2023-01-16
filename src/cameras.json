@@ -1,36 +1,14 @@
 {
   "camera1": {
-    "address": "192.168.0.23",
-    "cameraParamSpecs": {
-      "camType": 2,
-      "params": "cmd\u003dgetvideoattr\u0026cmd\u003dgetlampattrex\u0026cmd\u003dgetimageattr\u0026cmd\u003dgetinfrared\u0026cmd\u003dgetserverinfo\u0026cmd\u003dgetoverlayattr\u0026-region\u003d0\u0026cmd\u003dgetserverinfo\u0026cmd\u003dgetoverlayattr\u0026-region\u003d1",
-      "uri": "web/cgi-bin/hi3510/param.cgi",
-      "name": "ZTech MCW5B10X"
-    },
-    "ftp": true,
     "name": "Garden PTZ",
-    "onvifHost": "192.168.0.23:8080",
-    "ptzControls": true,
-    "snapshotUri": "http://192.168.0.23:80/tmpfs/auto.jpg",
     "streams": {
       "stream1": {
         "audio_bitrate": "16000",
         "audio_encoding": "G711",
         "audio_sample_rate": 8000,
-        "defaultOnMultiDisplay": false,
         "descr": "HD",
-        "motion": {
-          "enabled": false,
-          "mask_file": "",
-          "trigger_recording_on": ""
-        },
-        "netcam_uri": "rtsp://192.168.0.23:554/11",
+         "netcam_uri": "rtsp://192.168.0.23:554/11",
         "nms_uri": "http://localhost:8081/live/stream?suuid=stream1",
-        "recording": {
-          "enabled": true,
-          "location": "rec1",
-          "uri": "http://localhost:8084/recording/rec1/"
-        },
         "uri": "http://localhost:8081/ws/stream/suuid=stream1",
         "video_height": 1440,
         "video_width": 2560
@@ -39,20 +17,9 @@
         "audio_bitrate": "0",
         "audio_encoding": "G711",
         "audio_sample_rate": 8000,
-        "defaultOnMultiDisplay": true,
         "descr": "SD",
-        "motion": {
-          "enabled": false,
-          "mask_file": "",
-          "trigger_recording_on": ""
-        },
         "netcam_uri": "rtsp://192.168.0.23:554/12",
         "nms_uri":  "http://localhost:8081/live/stream?suuid=stream2",
-        "recording": {
-          "enabled": false,
-          "location": "rec2",
-          "uri": "http://localhost:8084/recording/rec2/"
-        },
         "uri": "http://localhost:8081/ws/stream/suuid=stream2",
         "video_height": 448,
         "video_width": 800
@@ -60,37 +27,15 @@
     }
   },
   "camera2": {
-    "address": "192.168.0.26",
-    "cameraParamSpecs": {
-      "camType": 1,
-      "params": "cmd\u003dgetinfrared\u0026cmd\u003dgetserverinfo\u0026cmd\u003dgetoverlayattr\u0026-region\u003d0\u0026cmd\u003dgetserverinfo\u0026cmd\u003dgetoverlayattr\u0026-region\u003d1",
-      "uri": "web/cgi-bin/hi3510/param.cgi",
-      "name": "SV3C (General)"
-    },
-    "ftp": false,
     "name": "Porch",
-    "onvifHost": "192.168.0.26:8080",
-    "ptzControls": false,
-    "snapshotUri": "http://192.168.0.26:80/tmpfs/auto.jpg",
     "streams": {
       "stream3": {
         "audio_bitrate": "0",
         "audio_encoding": "G711",
         "audio_sample_rate": 0,
-        "defaultOnMultiDisplay": false,
         "descr": "HD",
-        "motion": {
-          "enabled": false,
-          "mask_file": "",
-          "trigger_recording_on": ""
-        },
         "netcam_uri": "rtsp://192.168.0.26:554/11",
         "nms_uri":  "http://localhost:8081/live/stream?suuid=stream3",
-        "recording": {
-          "enabled": true,
-          "location": "rec3",
-          "uri": "http://localhost:8084/recording/rec3/"
-        },
         "uri": "http://localhost:8081/ws/stream/suuid=stream3",
         "video_height": 1080,
         "video_width": 1920
@@ -99,20 +44,9 @@
         "audio_bitrate": "0",
         "audio_encoding": "G711",
         "audio_sample_rate": 0,
-        "defaultOnMultiDisplay": true,
         "descr": "SD",
-        "motion": {
-          "enabled": true,
-          "mask_file": "porch_cam_mask.pgm",
-          "trigger_recording_on": "camera2.stream3"
-        },
         "netcam_uri": "rtsp://192.168.0.26:554/12",
         "nms_uri": "http://localhost:8081/live/stream?suuid=stream4",
-        "recording": {
-          "enabled": true,
-          "location": "rec4",
-          "uri": "http://localhost:8084/recording/rec4/"
-        },
         "uri": "http://localhost:8081/ws/stream/suuid=stream4",
         "video_height": 352,
         "video_width": 640
