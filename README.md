@@ -76,3 +76,5 @@ cd ..
 src/mp4f-ws-server
 
 ```
+
+go version go1.18.1 linux/amd64
