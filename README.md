@@ -68,3 +68,11 @@ The parameters in cameras.json are as described below.
 
 ## Setting up
 
+```
+git clone git@github.com:richard-austin/mp4f-ws-server.git
+cd mp4f-ws-server/src
+go build -o mp4f-ws-server
+cd ..
+src/mp4f-ws-server
+
+```
