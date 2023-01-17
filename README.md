@@ -94,6 +94,8 @@ cd mp4f-ws-server/src
 go build -o mp4f-ws-server
 cd ..
 src/mp4f-ws-server
+--or--
+GO111MODULE=on go run src/*.go
 ```
 ### View the streams on the web page
 set browser to http://localhost:8081
