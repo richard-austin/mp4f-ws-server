@@ -29,14 +29,20 @@ func NewStreams() *Streams {
 }
 
 func (s *Streams) addInput(suuid string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	s.StreamMap[suuid] = Stream{PcktStreams: map[string]PacketStream{}}
 }
 
 func (s *Streams) removeInput(suuid string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	delete(s.StreamMap, suuid)
 }
 
 func (s *Streams) addClient(suuid string) (string, chan Packet) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	cuuid := ""
 	pkt := make(chan Packet, 300)
 
@@ -53,6 +59,8 @@ func (s *Streams) addClient(suuid string) (string, chan Packet) {
 }
 
 func (s *Streams) deleteClient(suuid string, cuuid string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	stream, ok := s.StreamMap[suuid]
 	if ok {
 		delete(stream.PcktStreams, cuuid)
@@ -76,6 +84,8 @@ func (s *Streams) put(suuid string, pckt Packet) error {
 }
 
 func (s *Streams) putFtyp(suuid string, pckt Packet) (retVal error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	retVal = nil
 	// Check it is actually a ftyp
 	val := getSubBox(pckt, "ftyp")
@@ -95,6 +105,8 @@ func (s *Streams) putFtyp(suuid string, pckt Packet) (retVal error) {
 }
 
 func (s *Streams) putMoov(suuid string, pckt Packet) (retVal error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	retVal = nil
 	// Check it is actually a moov
 	val := getSubBox(pckt, "moov")
@@ -114,12 +126,16 @@ func (s *Streams) putMoov(suuid string, pckt Packet) (retVal error) {
 }
 
 func (s *Streams) getCodecs(suuid string) (err error, pckt Packet) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	pckt.pckt = append([]byte{0x09}, []byte(s.StreamMap[suuid].codecs)...)
 	err = nil
 	return
 }
 
 func (s *Streams) getFtyp(suuid string) (error, Packet) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	var retVal error = nil
 	stream, ok := s.StreamMap[suuid]
 	if !ok {
@@ -132,6 +148,8 @@ func (s *Streams) getFtyp(suuid string) (error, Packet) {
 }
 
 func (s *Streams) getMoov(suuid string) (error, Packet) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	var retVal error = nil
 	stream, ok := s.StreamMap[suuid]
 	if !ok {
@@ -144,6 +162,8 @@ func (s *Streams) getMoov(suuid string) (error, Packet) {
 }
 
 func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	if s.StreamMap[suuid].moov.pckt == nil {
 		err = fmt.Errorf("cannot get codecs, no moov data")
 		return

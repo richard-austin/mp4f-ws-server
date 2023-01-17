@@ -27,8 +27,24 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
 <h2 align=center>
     Stream = {{ .suuid }}
 </h2>
-<div class="container">
+<div style="padding-left: 30px">
     <div class="row">
+        <div class="col-1">
+            <label>Latency Lim.
+                <select onchange="setlatencyLim(this.value)">
+                    <option selected="selected" value="{{.defaultLatencyLimit}}">{{.defaultLatencyLimit}}</option>
+                    <option value="0.4">0.4</option>
+                    <option value="0.6">0.6</option>
+                    <option value="0.8">0.8</option>
+                    <option value="1.0">1.0</option>
+                    <option value="1.2">1.2</option>
+                    <option value="1.4">1.4</option>
+                    <option value="1.6">1.6</option>
+                    <option value="1.8">1.8</option>
+                    <option value="2.0">2.0</option>
+                </select>
+            </label>
+        </div>
         <div class="col-3">
             <div class="list-group">
                 {{ range $k, $v := .suuidMap }}
@@ -57,7 +73,7 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     // *** USER PARAMETERS ***
     let verbose = false;
     // let verbose = true; // enable for saturating the console ..
-    let buffering_sec = 0.8; // use some reasonable value
+    let buffering_sec = {{.defaultLatencyLimit}}; // use some reasonable value
 
     let buffering_sec_seek = buffering_sec * 0.9;
     // ..seek the stream if it's this much away or
@@ -97,6 +113,12 @@ https://stackoverflow.com/questions/54186634/sending-periodic-metadata-in-fragme
     function toString(arr, fr, to) { // From bytes to string.  Input: Uint8Array, start index, stop index.
         // https://developers.google.com/web/updates/2012/06/How-to-convert-ArrayBuffer-to-and-from-String
         return String.fromCharCode.apply(null, arr.slice(fr, to));
+    }
+    function setlatencyLim(value) {
+        buffering_sec= Number(value)
+        // Update these accordingly
+        buffering_sec_seek = buffering_sec * 0.9;
+        buffering_sec_seek_distance = buffering_sec * 0.5;
     }
 
     let started = false;

@@ -6,6 +6,33 @@ import (
 	"os"
 )
 
+type Config struct {
+	LogPath             string  `json:"log_path"`
+	LogLevelStr         string  `json:"log_level"`
+	ServerPort          int     `json:"server_port"`
+	DefaultLatencyLimit float32 `json:"default_latency_limit"`
+}
+
+func (c *Config) LogLevel() (err error, level log.Level) {
+	levelMap := map[string]log.Level{
+		"PANIC": log.PanicLevel,
+		"FATAL": log.FatalLevel,
+		"ERROR": log.ErrorLevel,
+		"WARN":  log.WarnLevel,
+		"INFO":  log.InfoLevel,
+		"DEBUG": log.DebugLevel,
+		"TRACE": log.TraceLevel,
+	}
+
+	level, ok := levelMap[c.LogLevelStr]
+
+	if !ok {
+		log.Fatalln("Unknown log level specified")
+	}
+
+	return
+}
+
 type StreamC struct {
 	Descr        string `json:"descr"`
 	AudioBitRate string `json:"audio_bitrate"`
@@ -34,15 +61,29 @@ func (c *Cameras) Suuids() (suuids map[string]string) {
 	return
 }
 
-func loadConfig() *Cameras {
-	var tmp Cameras
+func loadConfig() (config *Config, cameras *Cameras) {
+	var cams Cameras
+	var conf Config
+
 	data, err := os.ReadFile("src/cameras.json")
 	if err != nil {
 		log.Fatalln(err)
 	}
-	err = json.Unmarshal(data, &tmp.Cameras)
+	err = json.Unmarshal(data, &cams.Cameras)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	return &tmp
+
+	cameras = &cams
+	data, err = os.ReadFile("src/config.json")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = json.Unmarshal(data, &conf)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	config = &conf
+	return
 }
