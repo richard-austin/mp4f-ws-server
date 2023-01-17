@@ -97,6 +97,12 @@ src/mp4f-ws-server
 
 ```
 
+### Build for arm64 e.g. Raspberry pi
+An executable file for arm64 processors can be built on an x86 devlopment system
+```
+env GOOS=linux GOARCH=arm64 go build -o mp4f-ws_server_arm64
+```
+
 go version go1.18.1 linux/amd64
 
 ### View the streams on the web page
