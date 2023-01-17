@@ -9,7 +9,7 @@
 * Stream url without codecs preamble for other clients (such as ffmpeg)
 
 ### Configuration
-The configuration file is cameras.json, as shown below. There is a section for each camera with one or more streams (RTSP sources) supported for each camera.
+The configuration files are cameras.json to specify the camera streams and config.json for general server configuration.
 
 #### cameras.json
 ```json
