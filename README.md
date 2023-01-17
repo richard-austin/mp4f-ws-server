@@ -11,6 +11,7 @@
 ### Configuration
 The configuration file is cameras.json, as shown below. There is a section for each camera with one or more streams (RTSP sources) supported for each camera.
 
+#### cameras.json
 ```json
 {
 "camera1": {
@@ -66,7 +67,24 @@ The parameters in cameras.json are as described below.
             *  **client_uri** The URL ffmpeg must use to connect to the server input side. This is generally of the form [http://localhost:8081/live/stream?suuid=stream(*n*)]
             *  **uri** The websocket URL which MSE connects to. This is generally of the form [http://my-IP-address:8081/ws/stream?suuid=stream(*n*)]
 
-## Setting up
+#### config.json
+```json
+{
+  "log_path": "/var/log/mp4f-server/mp4f-server.log",
+  "log_level": "INFO",
+  "server_port": 8081,
+  "default_latency_limit": 0.8
+}
+```
+The parameters in config.json are as described below.
+#### Parameters
+* **log_path** The path where the log files will be wriiten
+* **log_level** The required level of logging (can be "PANIC", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", or "TRACE")
+* **server_port** The port the server will listen on (for web page, ffmpeg input and websocket output)
+* **default_latency_limit** This is the initial value for the latency limit when the web page is initially loaded. The value in use can be changed dynamically on the web page with a selector. When a new stream is selected, it will revert to the value given here. The latency limit determines how far behind real time the video must run before it is pulled in to a shorter delay. If this value is too high the latency can get larger than you might want. If set too low, poor stability can result. The optimum value depends on the network quality and the data rate of the stream. 
+
+
+### Setting up
 
 ```
 git clone git@github.com:richard-austin/mp4f-ws-server.git
