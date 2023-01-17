@@ -94,7 +94,8 @@ cd mp4f-ws-server/src
 go build -o mp4f-ws-server
 cd ..
 src/mp4f-ws-server
-
+--or--
+GO111MODULE=on go run src/*.go
 ```
 
 ### Build for arm64 e.g. Raspberry pi
