@@ -13,9 +13,10 @@ type Stream struct {
 	ftyp        Packet
 	moov        Packet
 	codecs      string
-	PcktStreams map[string]PacketStream // One packetStream for each client connected through the suuid
+	gopCache    GopCache
+	PcktStreams map[string]*PacketStream // One packetStream for each client connected through the suuid
 }
-type StreamMap map[string]Stream
+type StreamMap map[string]*Stream
 type Streams struct {
 	mutex sync.RWMutex
 	StreamMap
@@ -28,34 +29,32 @@ func NewStreams() *Streams {
 	return &s
 }
 
-func (s *Streams) addInput(suuid string) {
+func (s *Streams) addStream(suuid string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.StreamMap[suuid] = Stream{PcktStreams: map[string]PacketStream{}}
+	s.StreamMap[suuid] = &Stream{PcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache()}
 }
 
-func (s *Streams) removeInput(suuid string) {
+func (s *Streams) removeStream(suuid string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	delete(s.StreamMap, suuid)
 }
 
-func (s *Streams) addClient(suuid string) (string, chan Packet) {
+func (s *Streams) addClient(suuid string) (cuuid string, pkt chan Packet) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	cuuid := ""
-	pkt := make(chan Packet, 300)
 
 	stream, ok := s.StreamMap[suuid]
 	if ok {
-		id := pseudoUUID()
-		stream.PcktStreams[id] = PacketStream{}
-		cuuid = id
-		stream.PcktStreams[cuuid] = PacketStream{ps: pkt}
+		cuuid = pseudoUUID()
+		pktStream := NewPacketStream()
+		stream.PcktStreams[cuuid] = &pktStream
+		pkt = pktStream.ps
 	} else {
 		pkt = nil
 	}
-	return cuuid, pkt
+	return
 }
 
 func (s *Streams) deleteClient(suuid string, cuuid string) {
@@ -73,6 +72,10 @@ func (s *Streams) put(suuid string, pckt Packet) error {
 	var retVal error = nil
 	stream, ok := s.StreamMap[suuid]
 	if ok {
+		err := stream.gopCache.Input(pckt)
+		if err != nil {
+			_ = fmt.Errorf(err.Error())
+		}
 		for _, packetStream := range stream.PcktStreams {
 			packetStream.ps <- pckt
 		}
@@ -130,6 +133,17 @@ func (s *Streams) getCodecs(suuid string) (err error, pckt Packet) {
 	defer s.mutex.Unlock()
 	pckt.pckt = append([]byte{0x09}, []byte(s.StreamMap[suuid].codecs)...)
 	err = nil
+	return
+}
+
+func (s *Streams) getGOPCache(suuid string) (err error, gopCache *GopCacheCopy) {
+	gopCache = nil
+	stream, ok := s.StreamMap[suuid]
+	if !ok {
+		err = fmt.Errorf("no stream for %s in getGOPCache", suuid)
+		return
+	}
+	gopCache = stream.gopCache.GetCurrent()
 	return
 }
 
@@ -219,7 +233,14 @@ func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
 
 type PacketStream struct {
 	ps chan Packet
+	//	gopCacheCopy *GopCacheCopy
 }
+
+func NewPacketStream() (packetStream PacketStream) {
+	packetStream = PacketStream{ps: make(chan Packet, 300)}
+	return
+}
+
 type Packet struct {
 	pckt []byte
 }
