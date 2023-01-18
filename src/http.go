@@ -69,7 +69,7 @@ func serveHTTP() {
 	var first Camera
 	var firstStream string
 	for _, first = range cameras.Cameras {
-		for firstStream, _ = range first.Streams {
+		for firstStream = range first.Streams {
 			break
 		}
 		break
@@ -95,7 +95,7 @@ func serveHTTP() {
 	})
 	// For ffmpeg to write to
 	router.POST("/live/:suuid", func(c *gin.Context) {
-		var req = c.Request
+		req := c.Request
 		suuid := req.FormValue("suuid")
 		_, hasEntry := streams.StreamMap[suuid]
 		if hasEntry {
@@ -106,8 +106,8 @@ func serveHTTP() {
 		log.Infof("Input connected for %s", suuid)
 		readCloser := req.Body
 
-		streams.addInput(suuid)
-		defer streams.removeInput(suuid)
+		streams.addStream(suuid)
+		defer streams.removeStream(suuid)
 
 		// TODO: Need to find the most efficient way to get a clean buffer
 		data := make([]byte, 33000)
@@ -152,6 +152,10 @@ func serveHTTP() {
 				break
 			}
 			d = NewPacket(data[:numOfByte])
+
+			if err != nil {
+				log.Error(err)
+			}
 			err = streams.put(suuid, d)
 
 			if err != nil {
@@ -302,17 +306,32 @@ func ws(ws *websocket.Conn) {
 		}
 	}()
 
+	stream := streams.StreamMap[suuid]
+	gopCache := stream.gopCache.GetCurrent()
+	gopCacheEmpty := false
 	// Main loop to send moof and mdat atoms
 	started := false
 	for {
 		var err error
-		data = <-ch
-		if !started && !data.isKeyFrame() {
-			continue
+		var ok bool
+		if !gopCacheEmpty {
+			ok, data = gopCache.Get()
+			if !ok {
+				gopCacheEmpty = true
+				data = <-ch
+			} else {
+				started = true
+			}
 		} else {
-			started = true
+			data = <-ch
 		}
-
+		if !started {
+			if data.isKeyFrame() {
+				started = true
+			} else {
+				continue
+			}
+		}
 		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
 			log.Warnf("calling SetWriteDeadline:- %s", err.Error())
