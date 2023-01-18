@@ -85,7 +85,11 @@ The parameters in config.json are as described below.
 
 
 ### Setting up
-
+#### If ffmpeg is not installed
+```
+sudo apt install ffmpeg
+(Or as appropriate for your OS)
+```
 ```
 git clone git@github.com:richard-austin/mp4f-ws-server.git
 sudo mkdir /var/log/mp4f-server
