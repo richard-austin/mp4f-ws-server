@@ -85,21 +85,29 @@ The parameters in config.json are as described below.
 
 
 ### Setting up
-#### If ffmpeg is not installed
+#### ffmpeg is required, If not already installed
 ```
 sudo apt install ffmpeg
 (Or as appropriate for your OS)
 ```
+#### Download repo and set up log directory
 ```
 git clone git@github.com:richard-austin/mp4f-ws-server.git
 sudo mkdir /var/log/mp4f-server
 sudo chown your-user:your-user /var/log/mp4f-server
+```
+
+#### Run
+```
+cd mp4f-ws-server
+GO111MODULE=on go run src/*.go
+```
+#### Build and run
+```
 cd mp4f-ws-server/src
 go build -o mp4f-ws-server
 cd ..
 src/mp4f-ws-server
---or--
-GO111MODULE=on go run src/*.go
 ```
 ### View the streams on the web page
 set browser to http://localhost:8081
