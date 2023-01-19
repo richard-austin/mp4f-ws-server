@@ -193,6 +193,9 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 
 	log.Infof("Request %s", suuid)
 	cuuid, ch := streams.addClient(suuid)
+	if ch == nil {
+		return
+	}
 	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
 	defer streams.deleteClient(suuid, cuuid)
 
@@ -266,6 +269,9 @@ func ws(ws *websocket.Conn) {
 		return
 	}
 	cuuid, ch := streams.addClient(suuid)
+	if ch == nil {
+		return
+	}
 	defer streams.deleteClient(suuid, cuuid)
 	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
 
