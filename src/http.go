@@ -257,9 +257,6 @@ func ws(ws *websocket.Conn) {
 			log.Warnf("closing websocket:- %s", err.Error())
 		}
 	}()
-	if len(streams.StreamMap) == 0 {
-		return
-	}
 	suuid := ws.Request().FormValue("suuid")
 
 	log.Infof("Request %s", suuid)

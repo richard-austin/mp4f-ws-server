@@ -109,14 +109,19 @@ go build -o mp4f-ws-server
 cd ..
 src/mp4f-ws-server
 ```
-### View the streams on the web page
-set browser to http://localhost:8081
-
 ### Build for arm64 e.g. Raspberry pi
 An executable file for arm64 processors can be built on an x86 devlopment system
 ```
 env GOOS=linux GOARCH=arm64 go build -o mp4f-ws_server_arm64
 ```
+### View the streams on the web page
+set browser to http://localhost:8081
+### Websocket URL for mse
+ws://localhost:8081/ws/stream?suuid=stream1 (for stream1)
+### General (no codec header) http URL
+http://localhost:8081/h/stream?suuid=stream1 (for stream1)
+### Record stream1 with ffmpeg
+ffmpeg -f mp4 -i http://localhost:8081/h/stream?suuid=stream1 -f mp4 output.mp4f
 
 go version go1.18.1 linux/amd64
 
