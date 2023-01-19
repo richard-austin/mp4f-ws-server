@@ -254,23 +254,7 @@ func NewPacket(pckt []byte) Packet {
 func (p Packet) isKeyFrame() (retVal bool) {
 	// [moof [mfhd] [traf [tfhd] [tfdt] [trun]]]
 	retVal = false
-	if len(p.pckt) == 0 {
-		log.Warnf("packet has zero length in isKeyFrame")
-		return
-	}
-	moof := getSubBox(p, "moof")
-	if moof == nil {
-		log.Warnf("moof was nil in isKeyFrame")
-		return
-
-	}
-	traf := getSubBox(Packet{pckt: moof}, "traf")
-	if traf == nil {
-		log.Warnf("traf was nil in isKeyFrame")
-		return
-	}
-
-	trun := getSubBox(Packet{pckt: traf}, "trun")
+	trun := getSubBox(p, "trun")
 	if trun == nil {
 		log.Warnf("trun was nil in isKeyFrame")
 		return
@@ -278,6 +262,15 @@ func (p Packet) isKeyFrame() (retVal bool) {
 	flags := trun[10:14]
 
 	retVal = flags[1]&4 == 4
+	return
+}
+
+func (p Packet) isMoof() (retVal bool) {
+	retVal = false
+	if len(p.pckt) > 20 {
+		moof := getSubBox(p, "moof")
+		retVal = moof != nil
+	}
 	return
 }
 
