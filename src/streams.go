@@ -32,7 +32,7 @@ func NewStreams() *Streams {
 func (s *Streams) addStream(suuid string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.StreamMap[suuid] = &Stream{PcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache()}
+	s.StreamMap[suuid] = &Stream{PcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(config.GopCache)}
 }
 
 func (s *Streams) removeStream(suuid string) {
@@ -254,7 +254,17 @@ func NewPacket(pckt []byte) Packet {
 func (p Packet) isKeyFrame() (retVal bool) {
 	// [moof [mfhd] [traf [tfhd] [tfdt] [trun]]]
 	retVal = false
-	traf := getSubBox(p, "traf")
+	if len(p.pckt) == 0 {
+		log.Warnf("packet has zero length in isKeyFrame")
+		return
+	}
+	moof := getSubBox(p, "moof")
+	if moof == nil {
+		log.Warnf("moof was nil in isKeyFrame")
+		return
+
+	}
+	traf := getSubBox(Packet{pckt: moof}, "traf")
 	if traf == nil {
 		log.Warnf("traf was nil in isKeyFrame")
 		return

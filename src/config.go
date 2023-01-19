@@ -11,6 +11,7 @@ type Config struct {
 	LogLevelStr         string  `json:"log_level"`
 	ServerPort          int     `json:"server_port"`
 	DefaultLatencyLimit float32 `json:"default_latency_limit"`
+	GopCache            bool    `json:"gop_cache"`
 }
 
 func (c *Config) LogLevel() (err error, level log.Level) {
