@@ -29,9 +29,8 @@ func (g *GopCache) Input(p Packet) (err error) {
 		return
 	}
 	g.mutex.Lock()
-	const maxKeyFramePackets = 6
 	defer g.mutex.Unlock()
-	if (g.inputIndex > maxKeyFramePackets || g.inputIndex == 0) && p.isKeyFrame() {
+	if (p.isMoof() || g.inputIndex == 0) && p.isKeyFrame() {
 		g.inputIndex = 0
 	}
 	if g.inputIndex < g.cacheLength {
