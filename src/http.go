@@ -193,6 +193,9 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 
 	log.Infof("Request %s", suuid)
 	cuuid, ch := streams.addClient(suuid)
+	if ch == nil {
+		return
+	}
 	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
 	defer streams.deleteClient(suuid, cuuid)
 
@@ -221,22 +224,32 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	log.Tracef("Sent moov through http to %s:- %d bytes", suuid, bytes)
 
 	started := false
+	stream := streams.StreamMap[suuid]
+	gopCache := stream.gopCache.GetCurrent()
+	gopCacheUsed := stream.gopCache.GopCacheUsed
 	for {
 		var data Packet
 
-		data = <-ch
-		if !started && !data.isKeyFrame() {
-			continue
-		} else {
+		if gopCacheUsed {
+			data = gopCache.Get(ch)
 			started = true
-			bytes, err := w.Write(data.pckt)
-			if err != nil {
-				// Warning only as it could be because the client disconnected
-				log.Warnf("writing to client for %s:= %s", suuid, err.Error())
-				break
+		} else {
+			data = <-ch
+			if !started {
+				if data.isKeyFrame() {
+					started = true
+				} else {
+					continue
+				}
 			}
-			log.Tracef("Data sent to http client for %s:- %d bytes", suuid, bytes)
 		}
+		bytes, err := w.Write(data.pckt)
+		if err != nil {
+			// Warning only as it could be because the client disconnected
+			log.Warnf("writing to client for %s:= %s", suuid, err.Error())
+			break
+		}
+		log.Tracef("Data sent to http client for %s:- %d bytes", suuid, bytes)
 	}
 }
 
@@ -256,6 +269,9 @@ func ws(ws *websocket.Conn) {
 		return
 	}
 	cuuid, ch := streams.addClient(suuid)
+	if ch == nil {
+		return
+	}
 	defer streams.deleteClient(suuid, cuuid)
 	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
 
@@ -308,30 +324,24 @@ func ws(ws *websocket.Conn) {
 
 	stream := streams.StreamMap[suuid]
 	gopCache := stream.gopCache.GetCurrent()
-	gopCacheEmpty := false
+	gopCacheUsed := stream.gopCache.GopCacheUsed
 	// Main loop to send moof and mdat atoms
 	started := false
 	for {
-		var err error
-		var ok bool
-		if !gopCacheEmpty {
-			ok, data = gopCache.Get()
-			if !ok {
-				gopCacheEmpty = true
-				data = <-ch
-			} else {
-				started = true
-			}
+		if gopCacheUsed {
+			data = gopCache.Get(ch)
+			started = true
 		} else {
 			data = <-ch
-		}
-		if !started {
-			if data.isKeyFrame() {
-				started = true
-			} else {
-				continue
+			if !started {
+				if data.isKeyFrame() {
+					started = true
+				} else {
+					continue
+				}
 			}
 		}
+
 		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
 			log.Warnf("calling SetWriteDeadline:- %s", err.Error())

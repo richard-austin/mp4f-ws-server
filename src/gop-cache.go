@@ -6,25 +6,29 @@ import (
 )
 
 type GopCache struct {
-	cacheLength int
-	mutex       sync.Mutex
-	inputIndex  int
-	Cache       []Packet
+	GopCacheUsed bool
+	cacheLength  int
+	mutex        sync.Mutex
+	inputIndex   int
+	Cache        []Packet
 }
 
 type GopCacheCopy struct {
 	pktChan chan Packet
 }
 
-func NewGopCache() (cache GopCache) {
+func NewGopCache(used bool) (cache GopCache) {
 	const cacheLength int = 90
-	cache = GopCache{Cache: make([]Packet, cacheLength), inputIndex: 0, cacheLength: cacheLength - 1}
+	cache = GopCache{Cache: make([]Packet, cacheLength), inputIndex: 0, cacheLength: cacheLength - 1, GopCacheUsed: used}
 	return
 }
 
 func (g *GopCache) Input(p Packet) (err error) {
-	g.mutex.Lock()
 	err = nil
+	if !g.GopCacheUsed {
+		return
+	}
+	g.mutex.Lock()
 	const maxKeyFramePackets = 6
 	defer g.mutex.Unlock()
 	if (g.inputIndex > maxKeyFramePackets || g.inputIndex == 0) && p.isKeyFrame() {
@@ -40,26 +44,28 @@ func (g *GopCache) Input(p Packet) (err error) {
 }
 
 func (g *GopCache) GetCurrent() (gopCacheCopy *GopCacheCopy) {
+	if !g.GopCacheUsed {
+		return
+	}
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	gopCacheCopy = NewGopCacheCopy(g)
+	gopCacheCopy = newGopCacheCopy(g)
 	return
 }
-func NewGopCacheCopy(cache *GopCache) (copy *GopCacheCopy) {
+func newGopCacheCopy(cache *GopCache) (copy *GopCacheCopy) {
 	copy = &GopCacheCopy{pktChan: make(chan Packet, cache.cacheLength)}
-	for i := 0; i < cache.inputIndex; i++ {
-		copy.pktChan <- cache.Cache[i]
+	for _, pkt := range cache.Cache[:cache.inputIndex] {
+		copy.pktChan <- pkt
 	}
 	return
 }
 
-func (c GopCacheCopy) Get() (ok bool, packet Packet) {
-	ok = true
+func (c GopCacheCopy) Get(live chan Packet) (packet Packet) {
 	select {
 	case packet = <-c.pktChan:
 
 	default:
-		ok = false
+		packet = <-live
 	}
 	return
 }
