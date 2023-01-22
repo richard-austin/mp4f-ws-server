@@ -183,10 +183,12 @@ func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
 		return
 	}
 	names := []string{"trak", "mdia", "minf", "stbl", "stsd", "avc1", "avcC"}
+	hevcNames := []string{"trak", "mdia", "minf", "stbl", "stsd", "hev1", "hvcC"}
 
 	val := s.StreamMap[suuid].moov.pckt
 	// Find the video codec data
 	trakLen := 0
+
 	for i, n := range names {
 		val = getSubBox(Packet{val}, n)
 		if val != nil {
@@ -196,13 +198,36 @@ func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
 				trakLen = int(binary.BigEndian.Uint32(val[:4]))
 			}
 		} else {
-			log.Errorf("Error: No %s in moov", n)
+			log.Warnf("No %s in moov when looking for avc1 codec data", n)
 			break
 		}
 	}
-	var _ = trakLen
-	// Save the codec data in hex string format as required by mse
-	codecs = fmt.Sprintf("avc1.%2x", val[9:12])
+	// If avc1 codec found
+	if val != nil {
+		// Save the codec data in hex string format as required by mse
+		codecs = fmt.Sprintf("avc1.%02x%02x%02x", val[9], val[10], val[11])
+	} else {
+		// See if we can find h265 (hevc) codec data
+		val = s.StreamMap[suuid].moov.pckt
+		for i, n := range hevcNames {
+			val = getSubBox(Packet{val}, n)
+			if val != nil {
+				log.Tracef("Found %s", n)
+				if i == 0 {
+					// Save the length of the trak
+					trakLen = int(binary.BigEndian.Uint32(val[:4]))
+				}
+			} else {
+				log.Errorf("No %s in moov when looking for HEVC codec info", n)
+				break
+			}
+		}
+		// If avc1 codec found
+		if val != nil {
+			// Save the codec data in hex string format as required by mse
+			codecs = fmt.Sprintf("hvc1.%d.4.L%d.B0", val[9]&0x1f, val[21]&0x1f)
+		}
+	}
 
 	// Find audio codec data (if present)
 	val = s.StreamMap[suuid].moov.pckt[trakLen:]
