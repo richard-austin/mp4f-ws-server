@@ -230,7 +230,7 @@ func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
 				break
 			}
 		}
-		// If avc1 codec found
+		// If hvc1 codec found
 		if val != nil {
 			// Save the codec data in hex string format as required by mse
 			codecs = fmt.Sprintf("hvc1.%d.4.L%d.B0", val[9]&0x1f, val[21]&0x1f)
