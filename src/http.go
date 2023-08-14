@@ -17,7 +17,7 @@ var streams = NewStreams()
  ReadBox
  Sometimes the ftyp and moov atoms at the start of the stream from ffmpeg  are combined in one packet. This
 	function separates them if this occurs, so they can be put in their respective places and the moov
-	atom analyes to get the codec data. THis is only used to handle those first two messages. From then on it doesn't
+	atom analysis to get the codec data. THis is only used to handle those first two messages. From then on it doesn't
 	matter if messages get appended to each other as they are going straight to mse (or ffmpeg for recordings)
 */
 
@@ -183,7 +183,7 @@ func serveHTTP() {
 	addr := fmt.Sprintf(":%d", config.ServerPort)
 	err := router.Run(addr)
 	if err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
 	}
 }
 
