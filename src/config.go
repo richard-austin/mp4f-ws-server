@@ -9,6 +9,7 @@ import (
 type Config struct {
 	LogPath             string  `json:"log_path"`
 	LogLevelStr         string  `json:"log_level"`
+	CamerasJsonPath     string  `json:"cameras_json_path"`
 	ServerPort          int     `json:"server_port"`
 	DefaultLatencyLimit float32 `json:"default_latency_limit"`
 	GopCache            bool    `json:"gop_cache"`
@@ -35,17 +36,21 @@ func (c *Config) LogLevel() (err error, level log.Level) {
 }
 
 type StreamC struct {
-	Descr        string `json:"descr"`
-	AudioBitRate string `json:"audio_bitrate"`
-	NetcamUri    string `json:"netcam_uri"`
-	ClientUri    string `json:"client_uri"`
-	URI          string `json:"uri"`
+	Descr               string `json:"descr"`
+	Audio               bool   `json:"audio"`
+	AudioEncoding       string `json:"audio_encoding"`
+	NetcamUri           string `json:"netcam_uri"`
+	MediaServerInputUri string `json:"media_server_input_uri"`
+	URI                 string `json:"uri"`
 }
 
 type Camera struct {
-	Name    string             `json:"name"`
-	Address string             `json:"address"`
-	Streams map[string]StreamC `json:"streams"`
+	Name          string             `json:"name"`
+	Address       string             `json:"address"`
+	Streams       map[string]StreamC `json:"streams"`
+	Username      string             `json:"username"`
+	Password      string             `json:"password"`
+	RtspTransport string             `json:"rtsp_transport"`
 }
 
 type Cameras struct {

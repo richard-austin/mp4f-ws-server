@@ -14,41 +14,43 @@ The configuration files are cameras.json to specify the camera streams and confi
 #### cameras.json
 ```json
 {
-"camera1": {
-    "name": "Garden PTZ",
+  "camera1": {
+    "name": "Doorbell",
+    "username": "user",
+    "password": "password",
+    "rtsp_transport": "udp",
     "streams": {
       "stream1": {
-        "audio_bitrate": "16000",
+        "audio": true,
+        "audio_encoding": "aac",
         "descr": "HD",
-         "netcam_uri": "rtsp://192.168.0.23:554/11",
-        "client_uri": "http://localhost:8081/live/stream?suuid=stream1",
+        "netcam_uri": "rtsp://192.168.1.43:554",
+        "media_server_input_uri": "http://localhost:8081/live/stream?suuid=stream1",
         "uri": "http://localhost:8081/ws/stream/suuid=stream1"
-      },
-      "stream2": {
-        "audio_bitrate": "0",
-        "descr": "SD",
-        "netcam_uri": "rtsp://192.168.0.23:554/12",
-        "client_uri":  "http://localhost:8081/live/stream?suuid=stream2",
-        "uri": "http://localhost:8081/ws/stream/suuid=stream2"
       }
     }
   },
   "camera2": {
-    "name": "Porch",
+    "name": "Garden PTZ",
+    "username": "",
+    "password": "",
+    "rtsp_transport": "tcp",
     "streams": {
-      "stream3": {
-        "audio_bitrate": "0",
+      "stream2": {
+        "audio": true,
+        "audio_encoding": "ulaw",
         "descr": "HD",
-        "netcam_uri": "rtsp://192.168.0.26:554/11",
-        "client_uri":  "http://localhost:8081/live/stream?suuid=stream3",
-        "uri": "http://localhost:8081/ws/stream/suuid=stream3"
+        "netcam_uri": "rtsp://192.168.1.30:554/11",
+        "media_server_input_uri": "http://localhost:8081/live/stream?suuid=stream2",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream2"
       },
-      "stream4": {
-        "audio_bitrate": "0",
-         "descr": "SD",
-        "netcam_uri": "rtsp://192.168.0.26:554/12",
-        "client_uri": "http://localhost:8081/live/stream?suuid=stream4",
-        "uri": "http://localhost:8081/ws/stream/suuid=stream4"
+      "stream3": {
+        "audio": true,
+        "audio_encoding": "ulaw",
+        "descr": "SD",
+        "netcam_uri": "rtsp://192.168.1.30:554/12",
+        "media_server_input_uri": "http://localhost:8081/live/stream?suuid=stream3",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream3"
       }
     }
   }
@@ -59,9 +61,13 @@ The parameters in cameras.json are as described below.
 #### Parameters
 * **camera**(*n*)
     * **name** The camera name. This followed by the the relevant stream description is the descriptive text on the stream selector buttons on the test web page.
+    * **username** The username idf required for authentication. If not required, set to empty string
+    * **password** The password if required for authentication. If not required, set to empty string
+    *  **rtsp_transport** The RTSP transport used by ffmpeg, may be tcp or udp
     * **streams**
         * **stream**(*n*)
-            * **audio_bitrate** Audio resampling bitrate. As used in the -ar parameter of ffmpeg. Values can be 8000, 24000, 32000, 40000 or 48000. If the value 0 is used, audio will be disabed on the stream (-an on ffmpeg)
+            * **audio** Set to true to use cameras rtsp audio stream, else set to false if not supported or to ignore the audio.
+            * **audio_encoding** If the cameras audio format is AAC, set to aac, so ffmpeg will use copy for the audio. Setting to anything else will cause ffmpeg to encode the audio to AAC.
             *  **descr** Description of stream (say HD or SD). This follows the camera name for the descriptive text on the stream selector buttons on the test web page.
             *  **netcam_uri** The URL of this stream from the net camera.
             *  **client_uri** The URL ffmpeg must use to connect to the server input side. This is generally of the form [http://localhost:8081/live/stream?suuid=stream(*n*)]
@@ -79,7 +85,7 @@ The parameters in cameras.json are as described below.
 ```
 The parameters in config.json are as described below.
 #### Parameters
-* **log_path** The path where the log files will be wriiten
+* **log_path** The path where the log files will be written. The ffmpeg logs will also be written to the path as the server log. 
 * **log_level** The required level of logging (can be "PANIC", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", or "TRACE")
 * **server_port** The port the server will listen on (for web page, ffmpeg input and websocket output)
 * **default_latency_limit** This is the initial value for the latency limit when the web page is initially loaded. The value in use can be changed dynamically on the web page with a selector. When a new stream is selected, it will revert to the value given here. The latency limit determines how far behind real time the video must run before it is pulled in to a shorter delay. If this value is too high the latency can get larger than you might want. If set too low, poor stability can result. The optimum value depends on the network quality and the data rate of the stream. 
@@ -87,6 +93,10 @@ The parameters in config.json are as described below.
 
 ### Setting up
 #### ffmpeg is required, If not already installed
+_Note that ffmpeg version 5 and above do not work correctly with RTSP streams which include audio.
+The raw H264/H265 do not have the timestamps those versions require to sync with the audio.
+So far I've not found any parameters which fix the problem with versions 5 and 6._
+
 ```
 sudo apt install ffmpeg
 (Or as appropriate for your OS)
