@@ -1,20 +1,41 @@
 {
   "camera1": {
-    "name": "Garden PTZ",
+    "name": "Doorbell",
+    "username": "user",
+    "password": "password",
+    "rtsp_transport": "udp",
     "streams": {
       "stream1": {
-        "audio_bitrate": "8000",
+        "audio": true,
+        "audio_encoding": "aac",
         "descr": "HD",
-         "netcam_uri": "rtsp://192.168.1.23:554/11",
-        "client_uri": "http://localhost:8081/live/stream?suuid=stream1",
+        "netcam_uri": "rtsp://192.168.1.43:554",
+        "media_server_input_uri": "http://localhost:8081/live/stream?suuid=stream1",
         "uri": "http://localhost:8081/ws/stream/suuid=stream1"
-      },
+      }
+    }
+  },
+  "camera2": {
+    "name": "Garden PTZ",
+    "username": "",
+    "password": "",
+    "rtsp_transport": "tcp",
+    "streams": {
       "stream2": {
-        "audio_bitrate": "0",
-        "descr": "SD",
-        "netcam_uri": "rtsp://192.168.1.23:554/12",
-        "client_uri":  "http://localhost:8081/live/stream?suuid=stream2",
+        "audio": true,
+        "audio_encoding": "ulaw",
+        "descr": "HD",
+        "netcam_uri": "rtsp://192.168.1.30:554/11",
+        "media_server_input_uri": "http://localhost:8081/live/stream?suuid=stream2",
         "uri": "http://localhost:8081/ws/stream/suuid=stream2"
+      },
+      "stream3": {
+        "audio": false,
+        "audio_encoding": "ulaw",
+        "descr": "SD",
+        "netcam_uri": "rtsp://192.168.1.30:554/12",
+        "media_server_input_uri": "http://localhost:8081/live/stream?suuid=stream3",
+        "uri": "http://localhost:8081/ws/stream/suuid=stream3"
       }
     }
   }
