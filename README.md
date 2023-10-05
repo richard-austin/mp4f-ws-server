@@ -1,8 +1,8 @@
-# mp4f-ws-server
-##  An MP4f media server for live streaming from an RTSP service to an MSE browser front end
+# RTSPToFmp4
+##  A fragmented MP4 media server for live streaming from an RTSP service to an MSE browser front end
 ### Features
 * Stream RTSP sources to the web
-* mp4f streaming for low latency
+* fmp4 streaming for low latency
 * ffmpeg links this server with RTSP sources, giving flexiblity in source format and transcoding
 * Basic web page to check the streams
 * Stream url with codecs preamble for easy setup of MSE clients
