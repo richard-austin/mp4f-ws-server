@@ -3,6 +3,6 @@
   "log_level": "INFO",
   "server_port": 8081,
   "default_latency_limit": 0.8,
-  "gop_cache": true
+  "gop_cache": false
 }
 

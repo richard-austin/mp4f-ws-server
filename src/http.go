@@ -1,64 +1,15 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
-	"io"
 	"net/http"
 	"time"
 )
 
 var streams = NewStreams()
-
-/*
- ReadBox
- Sometimes the ftyp and moov atoms at the start of the stream from ffmpeg  are combined in one packet. This
-	function separates them if this occurs, so they can be put in their respective places and the moov
-	atom analysis to get the codec data. THis is only used to handle those first two messages. From then on it doesn't
-	matter if messages get appended to each other as they are going straight to mse (or ffmpeg for recordings)
-*/
-
-func ReadBox(readCloser io.ReadCloser, data []byte, queue chan Packet) (numOfByte int, err error) {
-	numOfByte = 0
-	if len(queue) > 0 {
-		pckt := <-queue
-		copy(data, pckt.pckt)
-		var boxLen = binary.BigEndian.Uint32(data[:4])
-		if boxLen > uint32(len(data)) {
-			lenData := len(data)
-			numOfByte, err = readCloser.Read(data[lenData:])
-			if err != nil {
-				return
-			}
-			numOfByte += lenData
-		}
-	} else {
-		numOfByte, err = readCloser.Read(data[:cap(data)])
-		if err != nil {
-			return
-		}
-	}
-	var boxLen = binary.BigEndian.Uint32(data[0:4])
-	if boxLen < uint32(numOfByte) {
-		// The moov atom is tagged onto ftyp
-		var tmp = make([]byte, uint32(numOfByte)-boxLen)
-		copy(tmp, data[boxLen:uint32(numOfByte)-boxLen])
-		moovLen := binary.BigEndian.Uint32(tmp[0:4])
-		if int(moovLen) > len(tmp) {
-			log.Errorf("Error: moov length (%d) is greater then the length of the message containing it (%d)", moovLen, len(tmp))
-			err = fmt.Errorf("error: moov length (%d) is greater then the length of the message containing it (%d)", moovLen, len(tmp))
-			return
-		}
-		queue <- NewPacket(tmp[:moovLen])
-		log.Infof("splitting packet boxLen = %d, numOfByte = %d\n", boxLen, numOfByte)
-		data = data[:boxLen]
-	}
-	numOfByte = int(boxLen)
-	return
-}
 
 func serveHTTP() {
 	router := gin.Default()
@@ -113,40 +64,40 @@ func serveHTTP() {
 		data := make([]byte, 33000)
 		queue := make(chan Packet, 1)
 
-		// Set up the stream ready for connection from client, put in the ftyp, moov and codec data
-		numOfByte, err := ReadBox(readCloser, data, queue)
-		if err != nil {
-			log.Errorf("Error reading the ftyp data for stream %s:- %s", suuid, err.Error())
-			return
-		}
+		//// Set up the stream ready for connection from client, put in the ftyp, moov and codec data
+		//numOfByte, err := ReadBox(readCloser, data, queue)
+		//if err != nil {
+		//	log.Errorf("Error reading the ftyp data for stream %s:- %s", suuid, err.Error())
+		//	return
+		//}
 
-		d := NewPacket(data[:numOfByte]) //make([]byte, numOfByte)
-		err = streams.putFtyp(suuid, d)
-		if err != nil {
-			return
-		}
-
-		numOfByte, err = ReadBox(readCloser, data, queue)
-		if err != nil {
-			log.Errorf("Error reading the moov data for stream %s:- %s", suuid, err.Error())
-			return
-		}
-
-		d = NewPacket(data[:numOfByte])
-		err = streams.putMoov(suuid, d)
-		if err == nil {
-			err, _ := streams.getCodecsFromMoov(suuid)
-			if err != nil {
-				return
-			}
-		}
+		d := NewPacket(data) //make([]byte, numOfByte)
+		//err := streams.putFtyp(suuid, d)
+		//if err != nil {
+		//	return
+		//}
+		//
+		//numOfByte, err := ReadBox(readCloser, data, queue)
+		//if err != nil {
+		//	log.Errorf("Error reading the moov data for stream %s:- %s", suuid, err.Error())
+		//	return
+		//}
+		//
+		//d = NewPacket(data)
+		//err = streams.putMoov(suuid, d)
+		//if err == nil {
+		//	err, _ := streams.getCodecsFromMoov(suuid)
+		//	if err != nil {
+		//		return
+		//	}
+		//}
 		// Empty the queue
 		for len(queue) > 0 {
 			_ = <-queue
 		}
 		for {
 			data = data[:33000]
-			numOfByte, err = readCloser.Read(data)
+			numOfByte, err := readCloser.Read(data)
 			if err != nil {
 				log.Errorf("Error reading the data feed for stream %s:- %s", suuid, err.Error())
 				break
@@ -157,7 +108,6 @@ func serveHTTP() {
 				log.Error(err)
 			}
 			err = streams.put(suuid, d)
-
 			if err != nil {
 				log.Errorf("Error putting the packet into stream %s:- %s", suuid, err.Error())
 				break
@@ -167,6 +117,7 @@ func serveHTTP() {
 			log.Tracef("%d bytes received", numOfByte)
 		}
 	})
+	log.Info("Point 1")
 	router.StaticFS("/web", http.Dir("web"))
 
 	// For http connections from ffmpeg to read from (for recordings)
@@ -174,12 +125,14 @@ func serveHTTP() {
 	router.GET("/h/:suuid", func(c *gin.Context) {
 		ServeHTTPStream(c.Writer, c.Request)
 	})
-
-	// For websocket connections from mse
+	log.Info("Point 2")
+	// For websocket connections
 	router.GET("/ws/:suuid", func(c *gin.Context) {
 		handler := websocket.Handler(ws)
 		handler.ServeHTTP(c.Writer, c.Request)
 	})
+
+	log.Info("http[ and web socket set up")
 	addr := fmt.Sprintf(":%d", config.ServerPort)
 	err := router.Run(addr)
 	if err != nil {
@@ -188,6 +141,8 @@ func serveHTTP() {
 }
 
 func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
+	log.Info("In ServeHTTPStream")
+
 	defer func() { r.Close = true }()
 	suuid := r.FormValue("suuid")
 
@@ -254,6 +209,7 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func ws(ws *websocket.Conn) {
+	log.Info("In ws")
 	defer func() {
 		err := ws.Close()
 		if err != nil {
@@ -277,39 +233,39 @@ func ws(ws *websocket.Conn) {
 
 	// Send the header information (codecs, ftyp and moov)
 	var data Packet
-	err, data = streams.getCodecs(suuid)
-	if err != nil {
-		log.Errorf("Error getting codecs: %s", err.Error())
-		return
-	}
-	err = websocket.Message.Send(ws, data.pckt)
-	if err != nil {
-		log.Errorf("Error writing codecs: %s", err.Error())
-		return
-	}
+	//err, data = streams.getCodecs(suuid)
+	//if err != nil {
+	//	log.Errorf("Error getting codecs: %s", err.Error())
+	//	return
+	//}
+	//err = websocket.Message.Send(ws, data.pckt)
+	//if err != nil {
+	//	log.Errorf("Error writing codecs: %s", err.Error())
+	//	return
+	//}
 	log.Tracef("Sent codecs through to %s:- %s", suuid, string(data.pckt))
 
-	err, data = streams.getFtyp(suuid)
-	if err != nil {
-		log.Errorf("Error getting ftyp: %s", err.Error())
-		return
-	}
-	err = websocket.Message.Send(ws, data.pckt)
-	if err != nil {
-		log.Errorf("Error writing ftyp: %s", err.Error())
-		return
-	}
-	log.Tracef("Sent ftyp through to %s:- %d bytes", suuid, len(data.pckt))
+	//err, data = streams.getFtyp(suuid)
+	//if err != nil {
+	//	log.Errorf("Error getting ftyp: %s", err.Error())
+	//	return
+	//}
+	//err = websocket.Message.Send(ws, data.pckt)
+	//if err != nil {
+	//	log.Errorf("Error writing ftyp: %s", err.Error())
+	//	return
+	//}
+	//log.Tracef("Sent ftyp through to %s:- %d bytes", suuid, len(data.pckt))
 
-	err, data = streams.getMoov(suuid)
-	if err != nil {
-		log.Errorf("Error getting moov: %s", err.Error())
-	}
-	err = websocket.Message.Send(ws, data.pckt)
-	if err != nil {
-		log.Errorf("Error writing moov: %s", err.Error())
-	}
-	log.Tracef("Sent moov through to %s:- %d bytes", suuid, len(data.pckt))
+	//err, data = streams.getMoov(suuid)
+	//if err != nil {
+	//	log.Errorf("Error getting moov: %s", err.Error())
+	//}
+	//err = websocket.Message.Send(ws, data.pckt)
+	//if err != nil {
+	//	log.Errorf("Error writing moov: %s", err.Error())
+	//}
+	//log.Tracef("Sent moov through to %s:- %d bytes", suuid, len(data.pckt))
 
 	go func() {
 		for {
@@ -322,36 +278,35 @@ func ws(ws *websocket.Conn) {
 		}
 	}()
 
-	stream := streams.StreamMap[suuid]
-	gopCache := stream.gopCache.GetCurrent()
-	gopCacheUsed := stream.gopCache.GopCacheUsed
+	//	stream := streams.StreamMap[suuid]
+	//	gopCache := stream.gopCache.GetCurrent()
+	//	gopCacheUsed := stream.gopCache.GopCacheUsed
 	// Main loop to send moof and mdat atoms
-	started := false
-	for {
-		if gopCacheUsed {
-			data = gopCache.Get(ch)
-			started = true
-		} else {
-			data = <-ch
-			if !started {
-				if data.isKeyFrame() {
-					started = true
-				} else {
-					continue
-				}
-			}
-		}
+	//started := true
+	//for {
+	//	if gopCacheUsed {
+	//		data = gopCache.Get(ch)
+	//		started = true
+	//	} else {
+	//		data = <-ch
+	//		if !started {
+	//			if data.isKeyFrame() {
+	//				started = true
+	//			} else {
+	//				continue
+	//			}
+	//		}
+	//	}
 
-		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		if err != nil {
-			log.Warnf("calling SetWriteDeadline:- %s", err.Error())
-			return
-		}
-		err = websocket.Message.Send(ws, data.pckt)
-		if err != nil {
-			log.Warnf("calling Send:- %s", err.Error())
-			return
-		}
-		log.Tracef("Data sent to client %d bytes", len(data.pckt))
+	err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if err != nil {
+		log.Warnf("calling SetWriteDeadline:- %s", err.Error())
+		return
 	}
+	err = websocket.Message.Send(ws, data.pckt)
+	if err != nil {
+		log.Warnf("calling Send:- %s", err.Error())
+		return
+	}
+	log.Tracef("Data sent to client %d bytes", len(data.pckt))
 }
