@@ -120,11 +120,11 @@ func serveHTTP() {
 	log.Info("Point 1")
 	router.StaticFS("/web", http.Dir("web"))
 
-	// For http connections from ffmpeg to read from (for recordings)
-	// This does not send the codec info ahead of ftyp and moov
-	router.GET("/h/:suuid", func(c *gin.Context) {
-		ServeHTTPStream(c.Writer, c.Request)
-	})
+	//// For http connections from ffmpeg to read from (for recordings)
+	//// This does not send the codec info ahead of ftyp and moov
+	//router.GET("/h/:suuid", func(c *gin.Context) {
+	//	ServeHTTPStream(c.Writer, c.Request)
+	//})
 	log.Info("Point 2")
 	// For websocket connections
 	router.GET("/ws/:suuid", func(c *gin.Context) {
@@ -132,7 +132,6 @@ func serveHTTP() {
 		handler.ServeHTTP(c.Writer, c.Request)
 	})
 
-	log.Info("http[ and web socket set up")
 	addr := fmt.Sprintf(":%d", config.ServerPort)
 	err := router.Run(addr)
 	if err != nil {
@@ -243,7 +242,7 @@ func ws(ws *websocket.Conn) {
 	//	log.Errorf("Error writing codecs: %s", err.Error())
 	//	return
 	//}
-	log.Tracef("Sent codecs through to %s:- %s", suuid, string(data.pckt))
+	//log.Tracef("Sent codecs through to %s:- %s", suuid, string(data.pckt))
 
 	//err, data = streams.getFtyp(suuid)
 	//if err != nil {
@@ -281,32 +280,27 @@ func ws(ws *websocket.Conn) {
 	//	stream := streams.StreamMap[suuid]
 	//	gopCache := stream.gopCache.GetCurrent()
 	//	gopCacheUsed := stream.gopCache.GopCacheUsed
-	// Main loop to send moof and mdat atoms
-	//started := true
-	//for {
-	//	if gopCacheUsed {
-	//		data = gopCache.Get(ch)
-	//		started = true
-	//	} else {
-	//		data = <-ch
-	//		if !started {
-	//			if data.isKeyFrame() {
-	//				started = true
-	//			} else {
-	//				continue
-	//			}
-	//		}
-	//	}
+	//	Main loop to send moof and mdat atoms
+	// started := true
+	for {
+		data = <-ch
+		//if !started {
+		//	if data.isKeyFrame() {
+		//		started = true
+		//	} else {
+		//		continue
+		//	}
 
-	err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	if err != nil {
-		log.Warnf("calling SetWriteDeadline:- %s", err.Error())
-		return
+		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		if err != nil {
+			log.Warnf("calling SetWriteDeadline:- %s", err.Error())
+			return
+		}
+		err = websocket.Message.Send(ws, data.pckt)
+		if err != nil {
+			log.Warnf("calling Send:- %s", err.Error())
+			return
+		}
+		log.Tracef("Data sent to client %d bytes", len(data.pckt))
 	}
-	err = websocket.Message.Send(ws, data.pckt)
-	if err != nil {
-		log.Warnf("calling Send:- %s", err.Error())
-		return
-	}
-	log.Tracef("Data sent to client %d bytes", len(data.pckt))
 }
