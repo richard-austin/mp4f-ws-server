@@ -60,7 +60,6 @@ func serveHTTP() {
 		streams.addStream(suuid)
 		defer streams.removeStream(suuid)
 
-		// TODO: Need to find the most efficient way to get a clean buffer
 		data := make([]byte, 33000)
 		queue := make(chan Packet, 1)
 
@@ -120,11 +119,11 @@ func serveHTTP() {
 	log.Info("Point 1")
 	router.StaticFS("/web", http.Dir("web"))
 
-	//// For http connections from ffmpeg to read from (for recordings)
-	//// This does not send the codec info ahead of ftyp and moov
-	//router.GET("/h/:suuid", func(c *gin.Context) {
-	//	ServeHTTPStream(c.Writer, c.Request)
-	//})
+	// For http connections from ffmpeg to read from (for recordings)
+	// This does not send the codec info ahead of ftyp and moov
+	router.GET("/h/:suuid", func(c *gin.Context) {
+		ServeHTTPStream(c.Writer, c.Request)
+	})
 	log.Info("Point 2")
 	// For websocket connections
 	router.GET("/ws/:suuid", func(c *gin.Context) {
@@ -153,50 +152,50 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
 	defer streams.deleteClient(suuid, cuuid)
 
-	err, data := streams.getFtyp(suuid)
-	if err != nil {
-		log.Errorf("Error getting ftyp: %s", err.Error())
-		return
-	}
-	bytes, err := w.Write(data.pckt)
-	if err != nil {
-		log.Errorf("Error writing ftyp: %s", err.Error())
-		return
-	}
-	log.Tracef("Sent ftyp through http to %s:- %d bytes", suuid, bytes)
+	//err, data := streams.getFtyp(suuid)
+	//if err != nil {
+	//	log.Errorf("Error getting ftyp: %s", err.Error())
+	//	return
+	//}
+	//bytes, err := w.Write(data.pckt)
+	//if err != nil {
+	//	log.Errorf("Error writing ftyp: %s", err.Error())
+	//	return
+	//}
+	//log.Tracef("Sent ftyp through http to %s:- %d bytes", suuid, bytes)
+	//
+	//err, data = streams.getMoov(suuid)
+	//if err != nil {
+	//	log.Errorf("Error getting moov: %s", err.Error())
+	//	return
+	//}
+	//bytes, err = w.Write(data.pckt)
+	//if err != nil {
+	//	log.Errorf("Error writing moov: %s", err.Error())
+	//	return
+	//}
+	//log.Tracef("Sent moov through http to %s:- %d bytes", suuid, bytes)
 
-	err, data = streams.getMoov(suuid)
-	if err != nil {
-		log.Errorf("Error getting moov: %s", err.Error())
-		return
-	}
-	bytes, err = w.Write(data.pckt)
-	if err != nil {
-		log.Errorf("Error writing moov: %s", err.Error())
-		return
-	}
-	log.Tracef("Sent moov through http to %s:- %d bytes", suuid, bytes)
-
-	started := false
-	stream := streams.StreamMap[suuid]
-	gopCache := stream.gopCache.GetCurrent()
-	gopCacheUsed := stream.gopCache.GopCacheUsed
+	//	started := false
+	//	stream := streams.StreamMap[suuid]
+	//gopCache := stream.gopCache.GetCurrent()
+	//gopCacheUsed := stream.gopCache.GopCacheUsed
 	for {
 		var data Packet
 
-		if gopCacheUsed {
-			data = gopCache.Get(ch)
-			started = true
-		} else {
-			data = <-ch
-			if !started {
-				if data.isKeyFrame() {
-					started = true
-				} else {
-					continue
-				}
-			}
-		}
+		//if gopCacheUsed {
+		//	data = gopCache.Get(ch)
+		//	started = true
+		//} else {
+		data = <-ch
+		//if !started {
+		//	if data.isKeyFrame() {
+		//		started = true
+		//	} else {
+		//		continue
+		//	}
+		//}
+		//}
 		bytes, err := w.Write(data.pckt)
 		if err != nil {
 			// Warning only as it could be because the client disconnected
@@ -204,6 +203,7 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		log.Tracef("Data sent to http client for %s:- %d bytes", suuid, bytes)
+
 	}
 }
 
