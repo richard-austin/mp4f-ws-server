@@ -40,7 +40,7 @@ func ffmpegFeed(config *Config, cameras *Cameras) {
 					if err != nil {
 						log.Error(err.Error())
 					}
-					err = codecs.setCodecString(stream.NetcamUri, suuid)
+					err = codecs.setCodecString(netcamUri, suuid)
 					if err != nil {
 						log.Error(err.Error())
 					}
