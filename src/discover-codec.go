@@ -99,7 +99,7 @@ func (_ *MimeCodecs) constructCodecString(stream FFProbeStream) (string, error) 
 		if stream.Profile == "Baseline" {
 			codec += ".4200"
 		} else if stream.Profile == "Main" {
-			codec += "4D00"
+			codec += ".4D40"
 		} else if stream.Profile == "High" {
 			codec += ".6400"
 		} else {
