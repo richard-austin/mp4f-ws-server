@@ -6,6 +6,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -71,6 +72,7 @@ func serveHTTP() {
 		//}
 
 		d := NewPacket(data) //make([]byte, numOfByte)
+		// Add the codec for video streams only, an "a" suffix on the suuid means it's an audio stream
 		//err := streams.putFtyp(suuid, d)
 		//if err != nil {
 		//	return
@@ -232,39 +234,18 @@ func ws(ws *websocket.Conn) {
 
 	// Send the header information (codecs, ftyp and moov)
 	var data Packet
-	//err, data = streams.getCodecs(suuid)
-	//if err != nil {
-	//	log.Errorf("Error getting codecs: %s", err.Error())
-	//	return
-	//}
-	//err = websocket.Message.Send(ws, data.pckt)
-	//if err != nil {
-	//	log.Errorf("Error writing codecs: %s", err.Error())
-	//	return
-	//}
-	//log.Tracef("Sent codecs through to %s:- %s", suuid, string(data.pckt))
-
-	//err, data = streams.getFtyp(suuid)
-	//if err != nil {
-	//	log.Errorf("Error getting ftyp: %s", err.Error())
-	//	return
-	//}
-	//err = websocket.Message.Send(ws, data.pckt)
-	//if err != nil {
-	//	log.Errorf("Error writing ftyp: %s", err.Error())
-	//	return
-	//}
-	//log.Tracef("Sent ftyp through to %s:- %d bytes", suuid, len(data.pckt))
-
-	//err, data = streams.getMoov(suuid)
-	//if err != nil {
-	//	log.Errorf("Error getting moov: %s", err.Error())
-	//}
-	//err = websocket.Message.Send(ws, data.pckt)
-	//if err != nil {
-	//	log.Errorf("Error writing moov: %s", err.Error())
-	//}
-	//log.Tracef("Sent moov through to %s:- %d bytes", suuid, len(data.pckt))
+	if !strings.HasSuffix(suuid, "a") {
+		err, data = streams.getCodec(suuid)
+		if err != nil {
+			log.Errorf("Error getting codecs: %s", err.Error())
+			return
+		}
+		err = websocket.Message.Send(ws, data.pckt)
+		if err != nil {
+			log.Errorf("Error writing codec: %s", err.Error())
+			return
+		}
+	}
 
 	go func() {
 		for {

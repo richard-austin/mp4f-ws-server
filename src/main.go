@@ -11,6 +11,7 @@ import (
 
 var cameras *Cameras
 var config *Config
+var codecs *MimeCodecs
 
 func main() {
 	var customFormatter = log.TextFormatter{}
@@ -20,6 +21,8 @@ func main() {
 	log.SetFormatter(formatter)
 
 	config, cameras = loadConfig()
+	codecs = NewMimeCodecs()
+
 	_, level := config.LogLevel()
 	log.SetLevel(level)
 	lumberjackLogger := &lumberjack.Logger{

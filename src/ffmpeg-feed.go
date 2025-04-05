@@ -15,7 +15,7 @@ func ffmpegFeed(config *Config, cameras *Cameras) {
 	path, _ := filepath.Split(config.LogPath)
 	for _, camera := range cameras.Cameras {
 		for _, stream := range camera.Streams {
-			go func(camera Camera, stream StreamC) {
+			go func(camera Camera, stream *StreamC) {
 				for {
 					time.Sleep(time.Second)
 					var audio string
@@ -27,10 +27,7 @@ func ffmpegFeed(config *Config, cameras *Cameras) {
 						audio = "-c:a copy"
 					}
 
-					// 5
-					//.1.2-3 does not support the -stimeout parameter for rtsp. Until the versions are in line again
-					// only use -stimer for live and not dev.
-					var stimeout string = "-timeout 1000000 "
+					var timeout = "-timeout 1000000 "
 					netcamUri := stream.NetcamUri
 					rtspTransport := strings.ToLower(camera.RtspTransport)
 
@@ -39,8 +36,18 @@ func ffmpegFeed(config *Config, cameras *Cameras) {
 						netcamUri = netcamUri[:idx] + url.QueryEscape(camera.Username) + ":" + url.QueryEscape(camera.Password) + "@" + netcamUri[idx:]
 					}
 					//	logging :=  "2>&1 >/dev/null | ts '[%Y-%m-%d %H:%M:%S]' >> ${log_dir}ffmpeg_${cam.name.replace(' ', '_') + "_" + stream.descr.replace(' ', '_').replace('.', '_')}_\$(date +%Y%m%d).log"
+					suuid, err := codecs.suuidFromUrl(stream.MediaServerInputUri)
+					if err != nil {
+						log.Error(err.Error())
+					}
+					err = codecs.setCodecString(stream.NetcamUri, suuid)
+					if err != nil {
+						log.Error(err.Error())
+					}
 
-					cmdStr := fmt.Sprintf("/usr/bin/ffmpeg -loglevel warning -hide_banner %s-fflags nobuffer -rtsp_transport %s -i  %s -c:v copy %s  -f hevc -preset ultrafast -tune zero_latency %s -vn -c:a pcm_alaw -b:a 48K -ar 8000 -f s16be -preset ultrafast -tune zero_latency http://localhost:8081/live/stream?suuid=stream1a", stimeout, rtspTransport, netcamUri, audio, stream.MediaServerInputUri)
+					codec, err := codecs.getCodecString(suuid)
+					log.Info("Codec string = " + codec)
+					cmdStr := fmt.Sprintf("/usr/bin/ffmpeg -loglevel warning -hide_banner %s-fflags nobuffer -rtsp_transport %s -i  %s -c:v copy %s  -f hevc -preset ultrafast -tune zero_latency %s -vn -c:a pcm_alaw -b:a 48K -ar 8000 -f s16be -preset ultrafast -tune zero_latency %s", timeout, rtspTransport, netcamUri, audio, stream.MediaServerInputUri, stream.MediaServerInputUri+"a")
 					cmdStr += " 2>&1 >/dev/null | ts '[%Y-%m-%d %H:%M:%S]' >> " + path + "ffmpeg_" + strings.Replace(camera.Name, " ", "_", -1) + "_" + strings.Replace(strings.Replace(stream.Descr, " ", "_", -1), " ", "_", -1) + "_$(date +%Y%m%d).log"
 					cmd := exec.Command("bash", "-c", cmdStr)
 					stdout, err := cmd.Output()
@@ -56,7 +63,7 @@ func ffmpegFeed(config *Config, cameras *Cameras) {
 						log.Infof("ffmpeg output (%s:%s):- %s ", camera.Name, stream.Descr, string(stdout))
 					}
 				}
-			}(camera, stream)
+			}(camera, &stream)
 		}
 	}
 }
