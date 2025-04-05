@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"net/url"
@@ -40,20 +41,21 @@ func ffmpegFeed(config *Config, cameras *Cameras) {
 					if err != nil {
 						log.Error(err.Error())
 					}
-					err = codecs.setCodecString(netcamUri, suuid)
+					streamInfo, err := codecs.setCodecString(netcamUri, suuid)
 					if err != nil {
 						log.Error(err.Error())
 					}
 
 					codec, err := codecs.getCodecString(suuid)
 					log.Info("Codec string = " + codec)
-					cmdStr := fmt.Sprintf("/usr/bin/ffmpeg -loglevel warning -hide_banner %s-fflags nobuffer -rtsp_transport %s -i  %s -c:v copy %s  -f hevc -preset ultrafast -tune zero_latency %s -vn -c:a pcm_alaw -b:a 48K -ar 8000 -f s16be -preset ultrafast -tune zero_latency %s", timeout, rtspTransport, netcamUri, audio, stream.MediaServerInputUri, stream.MediaServerInputUri+"a")
+					cmdStr := fmt.Sprintf("/usr/bin/ffmpeg -loglevel warning -hide_banner %s-fflags nobuffer -rtsp_transport %s -i  %s -c:v copy %s  -f %s -preset ultrafast -tune zero_latency %s -vn -c:a pcm_alaw -b:a 48K -ar 8000 -f s16be -preset ultrafast -tune zero_latency %s", timeout, rtspTransport, netcamUri, audio, streamInfo.CodecName, stream.MediaServerInputUri, stream.MediaServerInputUri+"a")
 					cmdStr += " 2>&1 >/dev/null | ts '[%Y-%m-%d %H:%M:%S]' >> " + path + "ffmpeg_" + strings.Replace(camera.Name, " ", "_", -1) + "_" + strings.Replace(strings.Replace(stream.Descr, " ", "_", -1), " ", "_", -1) + "_$(date +%Y%m%d).log"
 					cmd := exec.Command("bash", "-c", cmdStr)
 					stdout, err := cmd.Output()
 					log.Info(cmdStr)
 					if err != nil {
-						ee := err.(*exec.ExitError)
+						var ee *exec.ExitError
+						errors.As(err, &ee)
 						if ee != nil {
 							log.Errorf("ffmpeg (%s:%s):- %s, %s", camera.Name, stream.Descr, string(ee.Stderr), ee.Error())
 						} else {
