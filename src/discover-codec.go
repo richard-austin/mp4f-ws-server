@@ -42,7 +42,7 @@ func NewMimeCodecs() (mimeCodecs *MimeCodecs) {
 		 See https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices-appendixes
 	     for codec info.
 */
-func (codecs *MimeCodecs) setCodecString(rtspUrl string, suuid string) error {
+func (codecs *MimeCodecs) setCodecString(rtspUrl string, suuid string) (stream FFProbeStream, err error) {
 	log.Info("rtspurl = " + rtspUrl)
 	ffprobeCmd := "/usr/bin/ffprobe -hide_banner -i " + rtspUrl + " -threads 5 -v info -print_format json -show_streams -show_chapters -show_format -show_data"
 	out, err := exec.Command("bash", "-c", ffprobeCmd).Output()
@@ -56,15 +56,15 @@ func (codecs *MimeCodecs) setCodecString(rtspUrl string, suuid string) error {
 			if idx == -1 {
 				err = errors.New("No video stream at " + rtspUrl)
 			} else {
-				stream1 := streams.Streams[idx]
-				result, err = codecs.constructCodecString(stream1)
-				level := fmt.Sprintf("%X", stream1.Level)
-				log.Info(stream1.CodecName + ": width " + strconv.Itoa(stream1.Width) + ": Profile = " + stream1.Profile + ": Level = 0x" + level)
+				stream = streams.Streams[idx]
+				result, err = codecs.constructCodecString(stream)
+				level := fmt.Sprintf("%X", stream.Level)
+				log.Info(stream.CodecName + ": width " + strconv.Itoa(stream.Width) + ": Profile = " + stream.Profile + ": Level = 0x" + level)
 			}
 		}
 		codecs.Codecs[suuid] = result
 	}
-	return err
+	return stream, err
 }
 func (codecs *MimeCodecs) getCodecString(suuid string) (mimeCodec string, err error) {
 	err = nil
