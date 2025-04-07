@@ -210,7 +210,6 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func ws(ws *websocket.Conn) {
-	log.Info("In ws")
 	defer func() {
 		err := ws.Close()
 		if err != nil {
