@@ -50,17 +50,20 @@ func serveHTTP() {
 	router.POST("/live/:suuid", func(c *gin.Context) {
 		req := c.Request
 		suuid := req.FormValue("suuid")
-		_, hasEntry := streams.StreamMap[suuid]
-		if hasEntry {
-			log.Errorf("Cannot add %s, there is already an existing stream with that id", suuid)
+
+		baseSuuid, isAudio := strings.CutSuffix(suuid, "a")
+
+		stream, hasEntry := streams.StreamMap[baseSuuid]
+		if hasEntry && (isAudio && stream.hasAudio || !isAudio && stream.hasVideo) {
+			log.Errorf("Cannot add %s, there is already an existing stream with that id and media type", suuid)
 			return
 		}
 
 		log.Infof("Input connected for %s", suuid)
 		readCloser := req.Body
 
-		streams.addStream(suuid)
-		defer streams.removeStream(suuid)
+		streams.addStream(baseSuuid, isAudio)
+		defer streams.removeStream(baseSuuid)
 
 		data := make([]byte, 33000)
 
@@ -77,7 +80,7 @@ func serveHTTP() {
 			if err != nil {
 				log.Error(err)
 			}
-			err = streams.put(suuid, d)
+			err = streams.put(baseSuuid, d, isAudio)
 			if err != nil {
 				log.Errorf("Error putting the packet into stream %s:- %s", suuid, err.Error())
 				break
@@ -87,7 +90,6 @@ func serveHTTP() {
 			log.Tracef("%d bytes received", numOfByte)
 		}
 	})
-	log.Info("Point 1")
 	router.StaticFS("/web", http.Dir("web"))
 
 	// For http connections from ffmpeg to read from (for recordings)
@@ -116,12 +118,12 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	suuid := r.FormValue("suuid")
 
 	log.Infof("Request %s", suuid)
-	cuuid, ch := streams.addClient(suuid)
+	cuuid, ch := streams.addClient(suuid, false)
 	if ch == nil {
 		return
 	}
 	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
-	defer streams.deleteClient(suuid, cuuid)
+	defer streams.deleteClient(suuid, cuuid, false) // TODO: Set isAudio
 
 	//	started := false
 	//	stream := streams.StreamMap[suuid]
@@ -157,11 +159,13 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 func ws(ws *websocket.Conn) {
 	defer func() {
 		err := ws.Close()
+		log.Warn("Closing the websocket")
 		if err != nil {
 			log.Warnf("closing websocket:- %s", err.Error())
 		}
 	}()
 	suuid := ws.Request().FormValue("suuid")
+	baseSuuid, isAudio := strings.CutSuffix(suuid, "a")
 
 	log.Infof("Request %s", suuid)
 	err := ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
@@ -169,16 +173,16 @@ func ws(ws *websocket.Conn) {
 		log.Errorf("Error in SetWriteDeadline %s", err.Error())
 		return
 	}
-	cuuid, ch := streams.addClient(suuid)
+	cuuid, ch := streams.addClient(baseSuuid, isAudio)
 	if ch == nil {
 		return
 	}
-	defer streams.deleteClient(suuid, cuuid)
-	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
+	defer streams.deleteClient(baseSuuid, cuuid, isAudio)
+	log.Infof("number of cuuid's = %d", len(streams.StreamMap[baseSuuid].PcktStreams))
 
-	// Send the header information (codecs, ftyp and moov)
+	// Send the header information (codec)
 	var data Packet
-	if !strings.HasSuffix(suuid, "a") {
+	if !isAudio {
 		err, data = streams.getCodec(suuid)
 		if err != nil {
 			log.Errorf("Error getting codecs: %s", err.Error())
@@ -202,13 +206,16 @@ func ws(ws *websocket.Conn) {
 		}
 	}()
 
-	stream := streams.StreamMap[suuid]
-	gopCache := stream.gopCache.GetSnapshot()
+	stream := streams.StreamMap[baseSuuid]
+	var gopCache *GopCacheSnapshot
+	if !isAudio { // Audio GOP cache not used for live streams, only recordings
+		gopCache = stream.gopCache.GetSnapshot()
+	}
 	gopCacheUsed := stream.gopCache.GopCacheUsed
-	// Main loop to
-	started := false
+	// Main loop to send data to the browser
+	started := isAudio // Always started for audio as we don't wat for a keyframe
 	for {
-		if gopCacheUsed {
+		if gopCacheUsed && !isAudio {
 			data = gopCache.Get(ch)
 			started = true
 		} else {
@@ -221,6 +228,7 @@ func ws(ws *websocket.Conn) {
 				}
 			}
 		}
+
 		err = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
 			log.Warnf("calling SetWriteDeadline:- %s", err.Error())

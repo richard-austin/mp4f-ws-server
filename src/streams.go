@@ -5,15 +5,15 @@ import (
 	"crypto/rand"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"strings"
 	"sync"
 )
 
 type Stream struct {
-	ftyp        Packet
-	moov        Packet
-	gopCache    GopCache
-	PcktStreams map[string]*PacketStream // One packetStream for each client connected through the suuid
+	hasAudio         bool
+	hasVideo         bool
+	gopCache         GopCache
+	PcktStreams      map[string]*PacketStream // One packetStream for each client connected through the suuid
+	AudioPcktStreams map[string]*PacketStream // Separate set of streams for audio
 }
 type StreamMap map[string]*Stream
 type Streams struct {
@@ -28,27 +28,40 @@ func NewStreams() *Streams {
 	return &s
 }
 
-func (s *Streams) addStream(suuid string) {
+func (s *Streams) addStream(suuid string, isAudio bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.StreamMap[suuid] = &Stream{PcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(config.GopCache)}
+	stream := &Stream{PcktStreams: map[string]*PacketStream{}, AudioPcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(config.GopCache)}
+	if isAudio {
+		stream.hasAudio = true
+	} else {
+		stream.hasVideo = true
+	}
+
+	s.StreamMap[suuid] = stream
 }
 
 func (s *Streams) removeStream(suuid string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	delete(s.StreamMap, suuid)
+	_, ok := s.StreamMap[suuid]
+	if ok {
+		delete(s.StreamMap, suuid)
+	}
 }
 
-func (s *Streams) addClient(suuid string) (cuuid string, pkt chan Packet) {
+func (s *Streams) addClient(suuid string, isAudio bool) (cuuid string, pkt chan Packet) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-
 	stream, ok := s.StreamMap[suuid]
 	if ok {
 		cuuid = pseudoUUID()
 		pktStream := NewPacketStream()
-		stream.PcktStreams[cuuid] = &pktStream
+		if !isAudio {
+			stream.PcktStreams[cuuid] = &pktStream
+		} else {
+			stream.AudioPcktStreams[cuuid] = &pktStream
+		}
 		pkt = pktStream.ps
 	} else {
 		pkt = nil
@@ -56,20 +69,24 @@ func (s *Streams) addClient(suuid string) (cuuid string, pkt chan Packet) {
 	return
 }
 
-func (s *Streams) deleteClient(suuid string, cuuid string) {
+func (s *Streams) deleteClient(suuid string, cuuid string, isAudio bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	stream, ok := s.StreamMap[suuid]
 	if ok {
-		delete(stream.PcktStreams, cuuid)
+		if isAudio {
+			delete(stream.AudioPcktStreams, cuuid)
+		} else {
+			delete(stream.PcktStreams, cuuid)
+		}
+
 	}
 }
 
-func (s *Streams) put(suuid string, pckt Packet) error {
+func (s *Streams) put(suuid string, pckt Packet, isAudio bool) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	var retVal error = nil
-	isAudio := strings.HasSuffix(suuid, "a")
 	stream, ok := s.StreamMap[suuid]
 	if ok {
 		if !isAudio {
@@ -77,21 +94,37 @@ func (s *Streams) put(suuid string, pckt Packet) error {
 			if err != nil {
 				_ = fmt.Errorf(err.Error())
 			}
-		}
-		for _, packetStream := range stream.PcktStreams {
-			length := len(packetStream.ps)
-			log.Tracef("%s channel length = %d", suuid, length)
-			select {
-			case packetStream.ps <- pckt:
-			default:
-				{
-					retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
+			for _, packetStream := range stream.PcktStreams {
+				length := len(packetStream.ps)
+				log.Tracef("%s channel length = %d", suuid, length)
+				select {
+				case packetStream.ps <- pckt:
+				default:
+					{
+						retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
+					}
+				}
+			}
+		} else {
+			err := stream.gopCache.AudioInput(pckt)
+			if err != nil {
+				_ = fmt.Errorf(err.Error())
+			}
+			for _, packetStream := range stream.AudioPcktStreams {
+				length := len(packetStream.ps)
+				log.Tracef("%s audio channel length = %d", suuid, length)
+				select {
+				case packetStream.ps <- pckt:
+				default:
+					{
+						retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
+					}
 				}
 			}
 		}
 
 	} else {
-		retVal = fmt.Errorf("No stream with name %s was found", suuid)
+		retVal = fmt.Errorf("no stream with name %s was found", suuid)
 	}
 	return retVal
 }
