@@ -3,16 +3,15 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"strings"
 	"sync"
 )
 
 type Stream struct {
 	ftyp        Packet
 	moov        Packet
-	codecs      string
 	gopCache    GopCache
 	PcktStreams map[string]*PacketStream // One packetStream for each client connected through the suuid
 }
@@ -70,11 +69,14 @@ func (s *Streams) put(suuid string, pckt Packet) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	var retVal error = nil
+	isAudio := strings.HasSuffix(suuid, "a")
 	stream, ok := s.StreamMap[suuid]
 	if ok {
-		err := stream.gopCache.Input(pckt)
-		if err != nil {
-			_ = fmt.Errorf(err.Error())
+		if !isAudio {
+			err := stream.gopCache.Input(pckt)
+			if err != nil {
+				_ = fmt.Errorf(err.Error())
+			}
 		}
 		for _, packetStream := range stream.PcktStreams {
 			length := len(packetStream.ps)
@@ -94,14 +96,14 @@ func (s *Streams) put(suuid string, pckt Packet) error {
 	return retVal
 }
 
-func (s *Streams) getGOPCache(suuid string) (err error, gopCache *GopCacheCopy) {
+func (s *Streams) getGOPCache(suuid string) (err error, gopCache *GopCacheSnapshot) {
 	gopCache = nil
 	stream, ok := s.StreamMap[suuid]
 	if !ok {
 		err = fmt.Errorf("no stream for %s in getGOPCache", suuid)
 		return
 	}
-	gopCache = stream.gopCache.GetCurrent()
+	gopCache = stream.gopCache.GetSnapshot()
 	return
 }
 
@@ -112,87 +114,6 @@ func (s *Streams) getCodec(suuid string) (err error, pckt Packet) {
 	pckt.pckt = append([]byte{0x09}, []byte(codec)...)
 	return
 }
-
-//func (s *Streams) getCodecsFromMoov(suuid string) (err error, codecs string) {
-//	s.mutex.Lock()
-//	defer s.mutex.Unlock()
-//	if s.StreamMap[suuid].moov.pckt == nil {
-//		err = fmt.Errorf("cannot get codecs, no moov data")
-//		return
-//	}
-//	names := []string{"trak", "mdia", "minf", "stbl", "stsd", "avc1", "avcC"}
-//	hevcNames := []string{"trak", "mdia", "minf", "stbl", "stsd", "hev1", "hvcC"}
-//
-//	val := s.StreamMap[suuid].moov.pckt
-//	// Find the video codec data
-//	trakLen := 0
-//
-//	for i, n := range names {
-//		val = getSubBox(Packet{val}, n)
-//		if val != nil {
-//			log.Tracef("Found %s", n)
-//			if i == 0 {
-//				// Save the length of the trak
-//				trakLen = int(binary.BigEndian.Uint32(val[:4]))
-//			}
-//		} else {
-//			log.Warnf("No %s in moov when looking for avc1 codec data", n)
-//			break
-//		}
-//	}
-//	// If avc1 codec found
-//	if val != nil {
-//		// Save the codec data in hex string format as required by mse
-//		codecs = fmt.Sprintf("avc1.%02x%02x%02x", val[9], val[10], val[11])
-//	} else {
-//		// See if we can find h265 (hevc) codec data
-//		val = s.StreamMap[suuid].moov.pckt
-//		for i, n := range hevcNames {
-//			val = getSubBox(Packet{val}, n)
-//			if val != nil {
-//				log.Tracef("Found %s", n)
-//				if i == 0 {
-//					// Save the length of the trak
-//					trakLen = int(binary.BigEndian.Uint32(val[:4]))
-//				}
-//			} else {
-//				log.Errorf("No %s in moov when looking for HEVC codec info", n)
-//				break
-//			}
-//		}
-//		// If hvc1 codec found
-//		if val != nil {
-//			// Save the codec data in hex string format as required by mse
-//			codecs = fmt.Sprintf("hvc1.%d.4.L%d.B0", val[9]&0x1f, val[21]&0x1f)
-//		}
-//	}
-//
-//	// Find audio codec data (if present)
-//	val = s.StreamMap[suuid].moov.pckt[trakLen:]
-//	names2 := []string{"trak", "mdia", "minf", "stbl", "stsd", "mp4a", "esds"}
-//
-//	for _, n := range names2 {
-//		val = getSubBox(Packet{val}, n)
-//		if val != nil {
-//			log.Tracef("Found %s", n)
-//		} else {
-//			log.Tracef("No second %s in moov. No audio present", n)
-//			break
-//		}
-//	}
-//
-//	if val != nil {
-//		// Audio stream present
-//		aacCodec := val[25:27]
-//		aacCodec[1] &= 0x0f // Mask off the high nybble
-//		codecs += fmt.Sprintf(", mp4a.%2x.%x", aacCodec[0], aacCodec[1])
-//	}
-//
-//	stream := s.StreamMap[suuid]
-//	stream.codecs = codecs
-//	s.StreamMap[suuid] = stream
-//	return
-//}
 
 type PacketStream struct {
 	ps chan Packet
@@ -214,40 +135,29 @@ func NewPacket(pckt []byte) Packet {
 	return Packet{pckt: b}
 }
 
+var hevcStart = []byte{0x00, 0x00, 0x01}
+var h264Start = []byte{0x00, 0x00, 0x00, 0x01}
+var h264KeyFrame1 = []byte{0x67, 0x64}
+var h264KeyFrame2 = []byte{0x27, 0x64}
+var h264KeyFrame3 = []byte{0x61, 0x88}
+
 func (p Packet) isKeyFrame() (retVal bool) {
-	// [moof [mfhd] [traf [tfhd] [tfdt] [trun]]]
 	retVal = false
-	trun := getSubBox(p, "trun")
-	if trun == nil {
-		log.Warnf("trun was nil in isKeyFrame")
-		return
-	}
-	flags := trun[10:14]
-
-	retVal = flags[1]&4 == 4
-	return
-}
-
-func (p Packet) isMoof() (retVal bool) {
-	retVal = false
-	if len(p.pckt) > 20 {
-		moof := getSubBox(p, "moof")
-		retVal = moof != nil
-	}
-	return
-}
-
-func getSubBox(pckt Packet, boxName string) (sub_box []byte) {
-	searchData := pckt.pckt
-	searchTerm := []byte(boxName)
-	idx := bytes.Index(searchData, searchTerm)
-
-	if idx >= 4 {
-		length := int(binary.BigEndian.Uint32(searchData[idx-4 : idx]))
-		sub_box = searchData[idx-4 : length+idx-4]
-
-	} else {
-		sub_box = nil
+	if bytes.Equal(p.pckt[:len(h264Start)], h264Start) {
+		// H264 header
+		retVal = bytes.Equal(p.pckt[4:6], h264KeyFrame1)
+		if !retVal {
+			retVal = bytes.Equal(p.pckt[4:6], h264KeyFrame2)
+		}
+		if !retVal {
+			retVal = bytes.Equal(p.pckt[4:6], h264KeyFrame3)
+		}
+	} else if bytes.Equal(p.pckt[:len(hevcStart)], hevcStart) {
+		// HEVC header
+		theByte := p.pckt[3]
+		retVal = theByte == 0x40
+		theByte = (theByte >> 1) & 0x3f
+		retVal = theByte == 0x19 || theByte == 0x20
 	}
 	return
 }
