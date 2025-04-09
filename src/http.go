@@ -30,9 +30,8 @@ func serveHTTP() {
 	router.GET("/", func(c *gin.Context) {
 
 		c.HTML(http.StatusOK, "index.gohtml", gin.H{
-			"suuidMap":            suuids,
-			"suuid":               firstStream,
-			"defaultLatencyLimit": config.DefaultLatencyLimit,
+			"suuidMap": suuids,
+			"suuid":    firstStream,
 		})
 	})
 
@@ -40,9 +39,8 @@ func serveHTTP() {
 	router.GET("/:suuid", func(c *gin.Context) {
 
 		c.HTML(http.StatusOK, "index.gohtml", gin.H{
-			"suuidMap":            suuids,
-			"suuid":               c.Param("suuid"),
-			"defaultLatencyLimit": config.DefaultLatencyLimit,
+			"suuidMap": suuids,
+			"suuid":    c.Param("suuid"),
 		})
 	})
 
@@ -111,40 +109,48 @@ func serveHTTP() {
 	}
 }
 
+// ServeHTTPStream For recording from
 func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	log.Info("In ServeHTTPStream")
 
 	defer func() { r.Close = true }()
 	suuid := r.FormValue("suuid")
+	baseSuuid, isAudio := strings.CutSuffix(suuid, "a")
 
 	log.Infof("Request %s", suuid)
-	cuuid, ch := streams.addClient(suuid, false)
+	cuuid, ch := streams.addClient(baseSuuid, isAudio)
 	if ch == nil {
 		return
 	}
-	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
-	defer streams.deleteClient(suuid, cuuid, false) // TODO: Set isAudio
+	log.Infof("number of cuuid's = %d", len(streams.StreamMap[baseSuuid].PcktStreams))
+	defer streams.deleteClient(baseSuuid, cuuid, isAudio) // TODO: Set isAudio
 
-	//	started := false
-	//	stream := streams.StreamMap[suuid]
-	//gopCache := stream.gopCache.GetCurrent()
-	//gopCacheUsed := stream.gopCache.GopCacheUsed
+	started := false
+	stream := streams.StreamMap[baseSuuid]
+	var gopCache *GopCacheSnapshot
+	if isAudio {
+		gopCache = stream.gopCache.GetAudioSnapshot()
+	} else {
+		gopCache = stream.gopCache.GetSnapshot()
+	}
+
+	gopCacheUsed := stream.gopCache.GopCacheUsed
 	for {
 		var data Packet
 
-		//if gopCacheUsed {
-		//	data = gopCache.Get(ch)
-		//	started = true
-		//} else {
-		data = <-ch
-		//if !started {
-		//	if data.isKeyFrame() {
-		//		started = true
-		//	} else {
-		//		continue
-		//	}
-		//}
-		//}
+		if gopCacheUsed {
+			data = gopCache.Get(ch)
+			started = true
+		} else {
+			data = <-ch
+			if !started {
+				if !isAudio && data.isKeyFrame() {
+					started = true
+				} else {
+					continue
+				}
+			}
+		}
 		bytes, err := w.Write(data.pckt)
 		if err != nil {
 			// Warning only as it could be because the client disconnected
@@ -156,6 +162,7 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ws For live streaming connection
 func ws(ws *websocket.Conn) {
 	defer func() {
 		err := ws.Close()

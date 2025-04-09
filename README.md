@@ -79,7 +79,6 @@ The parameters in cameras.json are as described below.
   "log_path": "/var/log/mp4f-server/mp4f-server.log",
   "log_level": "INFO",
   "server_port": 8081,
-  "default_latency_limit": 0.8,
   "gop_cache": true
 }
 ```
@@ -88,7 +87,6 @@ The parameters in config.json are as described below.
 * **log_path** The path where the log files will be written. The ffmpeg logs will also be written to the path as the server log. 
 * **log_level** The required level of logging (can be "PANIC", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", or "TRACE")
 * **server_port** The port the server will listen on (for web page, ffmpeg input and websocket output)
-* **default_latency_limit** This is the initial value for the latency limit when the web page is initially loaded. The value in use can be changed dynamically on the web page with a selector. When a new stream is selected, it will revert to the value given here. The latency limit determines how far behind real time the video must run before it is pulled in to a shorter delay. If this value is too high the latency can get larger than you might want. If set too low, poor stability can result. The optimum value depends on the network quality and the data rate of the stream. 
 * **gop_cache** Enables the GOP cache if true. Without the GOP cache, the server will wait for the next keyframe to start the video stream with, resulting in an initial delay. When set to true, the video will start immediately.
 
 ### Setting up
