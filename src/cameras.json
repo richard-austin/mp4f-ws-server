@@ -2,7 +2,7 @@
   "camera1": {
     "name": "Doorbell",
     "username": "admin",
-    "password": "R@nc1dTapsB0ttom",
+    "password": "admin",
     "rtsp_transport": "tcp",
     "streams": {
       "stream1": {
