@@ -37,8 +37,11 @@ func (g *GopCache) Input(p Packet) (err error) {
 	}
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
+
 	if p.isKeyFrame() {
 		g.inputIndex = 0
+		g.audioMutex.Lock()
+		defer g.audioMutex.Unlock()
 		g.audioInputIndex = 0
 	}
 	if g.inputIndex < g.cacheLength {
@@ -50,6 +53,10 @@ func (g *GopCache) Input(p Packet) (err error) {
 	return
 }
 
+// AudioInput
+// "GOP" cache for audio packets. The audioInputIndex is reset to zero when video keyframes come in.
+// This means that the video and audio start from the same point in time and helps to keep the
+// video and audio in sync for recordings
 func (g *GopCache) AudioInput(p Packet) (err error) {
 	err = nil
 	if !g.GopCacheUsed {
@@ -59,6 +66,8 @@ func (g *GopCache) AudioInput(p Packet) (err error) {
 	defer g.audioMutex.Unlock()
 	if g.audioInputIndex < g.audioCacheLength {
 		g.AudioCache[g.audioInputIndex] = p
+		//	log.Info("Audio gop cache size = " + strconv.Itoa(g.audioInputIndex))
+		g.audioInputIndex++
 	} else {
 		err = fmt.Errorf("audio GOP cache is full")
 	}
@@ -88,14 +97,17 @@ func (g *GopCache) GetAudioSnapshot() (snapshot *GopCacheSnapshot) {
 // Create a new GOP cache snapshot from the current GOP cache
 // **
 func newFeeder(g *GopCache, isAudio bool) (feeder *GopCacheSnapshot) {
-	feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.cacheLength)}
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
 	if !isAudio {
+		g.mutex.Lock()
+		feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.cacheLength)}
+		defer g.mutex.Unlock()
 		for _, pkt := range g.Cache[:g.inputIndex] {
 			feeder.pktChan <- pkt
 		}
 	} else {
+		g.audioMutex.Lock()
+		feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.audioCacheLength)}
+		defer g.audioMutex.Unlock()
 		for _, pkt := range g.AudioCache[:g.audioInputIndex] {
 			feeder.pktChan <- pkt
 		}

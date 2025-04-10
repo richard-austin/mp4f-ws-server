@@ -1,8 +1,8 @@
 {
   "camera1": {
     "name": "Doorbell",
-    "username": "",
-    "password": "",
+    "username": "admin",
+    "password": "R@nc1dTapsB0ttom",
     "rtsp_transport": "tcp",
     "streams": {
       "stream1": {
@@ -10,8 +10,8 @@
         "audio_encoding": "aac",
         "descr": "HD",
         "netcam_uri": "rtsp://192.168.1.21:554/11",
-        "media_server_input_uri": "http://localhost:8081/live/stream?suuid=stream1",
-        "uri": "http://localhost:8081/ws/stream/suuid=stream1"
+        "media_server_input_uri": "http://localhost:8081/live/stream?suuid=cam1-stream1",
+        "uri": "http://localhost:8081/ws/stream/suuid=cam1-stream1"
       }
     }
   }
