@@ -110,6 +110,8 @@ func serveHTTP() {
 }
 
 // ServeHTTPStream For recording from
+// Recording command example which seems to work well. The tempo filter compensates for the tempo filter used to keep libe audio and video in sync:-
+// ffmpeg -y -f alaw -ar 48000 -i http://localhost:8081/h/stream?suuid=cam1-stream1a -f h264 -i http://localhost:8081/h/stream?suuid=cam1-stream1 -f mp4 -af atempo=0.9804 test.mp4
 func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	log.Info("In ServeHTTPStream")
 
@@ -125,20 +127,21 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	log.Infof("number of cuuid's = %d", len(streams.StreamMap[baseSuuid].PcktStreams))
 	defer streams.deleteClient(baseSuuid, cuuid, isAudio) // TODO: Set isAudio
 
-	started := false
+	started := isAudio // Always started for audio as we don't wait for a keyframe
 	stream := streams.StreamMap[baseSuuid]
 	var gopCache *GopCacheSnapshot
-	if isAudio {
-		gopCache = stream.gopCache.GetAudioSnapshot()
-	} else {
-		gopCache = stream.gopCache.GetSnapshot()
-	}
-
 	gopCacheUsed := stream.gopCache.GopCacheUsed
+	if gopCacheUsed {
+		if isAudio {
+			gopCache = stream.gopCache.GetAudioSnapshot()
+		} else {
+			gopCache = stream.gopCache.GetSnapshot()
+		}
+	}
 	for {
 		var data Packet
 
-		if gopCacheUsed {
+		if gopCacheUsed && gopCache != nil && !isAudio {
 			data = gopCache.Get(ch)
 			started = true
 		} else {
@@ -220,7 +223,7 @@ func ws(ws *websocket.Conn) {
 	}
 	gopCacheUsed := stream.gopCache.GopCacheUsed
 	// Main loop to send data to the browser
-	started := isAudio // Always started for audio as we don't wat for a keyframe
+	started := isAudio // Always started for audio as we don't wait for a keyframe
 	for {
 		if gopCacheUsed && !isAudio {
 			data = gopCache.Get(ch)
