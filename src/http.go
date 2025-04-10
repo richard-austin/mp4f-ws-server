@@ -141,7 +141,7 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		var data Packet
 
-		if gopCacheUsed && gopCache != nil {
+		if gopCacheUsed && gopCache != nil && !isAudio {
 			data = gopCache.Get(ch)
 			started = true
 		} else {

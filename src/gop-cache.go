@@ -39,13 +39,14 @@ func (g *GopCache) Input(p Packet) (err error) {
 	defer g.mutex.Unlock()
 
 	if p.isKeyFrame() {
-		g.inputIndex = 0
 		g.audioMutex.Lock()
 		defer g.audioMutex.Unlock()
+		g.inputIndex = 0
 		g.audioInputIndex = 0
 	}
 	if g.inputIndex < g.cacheLength {
 		g.Cache[g.inputIndex] = p
+		//	log.Error("Video gop cache size = " + strconv.Itoa(g.inputIndex))
 		g.inputIndex++
 	} else {
 		err = fmt.Errorf("GOP Cache is full")
@@ -66,7 +67,7 @@ func (g *GopCache) AudioInput(p Packet) (err error) {
 	defer g.audioMutex.Unlock()
 	if g.audioInputIndex < g.audioCacheLength {
 		g.AudioCache[g.audioInputIndex] = p
-		//	log.Info("Audio gop cache size = " + strconv.Itoa(g.audioInputIndex))
+		//		log.Info("Audio gop cache size = " + strconv.Itoa(g.audioInputIndex))
 		g.audioInputIndex++
 	} else {
 		err = fmt.Errorf("audio GOP cache is full")
