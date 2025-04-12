@@ -170,7 +170,7 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Infof("number of cuuid's = %d", len(streams.StreamMap[rsuuid].PcktStreams))
-	defer streams.deleteClient(rsuuid, cuuid, false) // TODO: Set isAudio
+	defer streams.deleteClient(rsuuid, cuuid, false)
 
 	for {
 		var data Packet
