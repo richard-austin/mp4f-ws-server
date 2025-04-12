@@ -44,7 +44,7 @@ func serveHTTP() {
 		})
 	})
 
-	// For ffmpeg to write to
+	// For ffmpeg to write to for live streaming (with suuid)
 	router.POST("/live/:suuid", func(c *gin.Context) {
 		req := c.Request
 		suuid := req.FormValue("suuid")
@@ -88,14 +88,58 @@ func serveHTTP() {
 			log.Tracef("%d bytes received", numOfByte)
 		}
 	})
+
+	// For ffmpeg to write to for recording (with rsuuid)
+	router.POST("/recording/:rsuuid", func(c *gin.Context) {
+		req := c.Request
+		rsuuid := req.FormValue("rsuuid")
+
+		_, hasEntry := streams.StreamMap[rsuuid]
+		if hasEntry {
+			log.Errorf("Cannot add %s, there is already an existing stream with that id and media type", rsuuid)
+			return
+		}
+
+		log.Infof("Recording input connected for %s", rsuuid)
+		readCloser := req.Body
+
+		streams.addStream(rsuuid, false, true)
+		defer streams.removeStream(rsuuid)
+
+		data := make([]byte, 33000)
+
+		d := NewPacket(data) //make([]byte, numOfByte)
+		for {
+			data = data[:33000]
+			numOfByte, err := readCloser.Read(data)
+			if err != nil {
+				log.Errorf("Error reading the data feed for stream %s:- %s", rsuuid, err.Error())
+				break
+			}
+			d = NewPacket(data[:numOfByte])
+
+			if err != nil {
+				log.Error(err)
+			}
+			err = streams.put(rsuuid, d, false)
+			if err != nil {
+				log.Errorf("Error putting the packet into stream %s:- %s", rsuuid, err.Error())
+				break
+			} else if numOfByte == 0 {
+				break
+			}
+			log.Tracef("%d bytes received", numOfByte)
+		}
+	})
+
 	router.StaticFS("/web", http.Dir("web"))
 
 	// For http connections from ffmpeg to read from (for recordings)
-	// This does not send the codec info
-	router.GET("/h/:suuid", func(c *gin.Context) {
+	// This is the mpegts stream
+	router.GET("/h/:rsuuid", func(c *gin.Context) {
 		ServeHTTPStream(c.Writer, c.Request)
 	})
-	log.Info("Point 2")
+
 	// For websocket connections
 	router.GET("/ws/:suuid", func(c *gin.Context) {
 		handler := websocket.Handler(ws)
@@ -112,56 +156,32 @@ func serveHTTP() {
 // ServeHTTPStream For recording from
 // Recording command example which seems to work well. The tempo filter compensates for the tempo filter used to keep libe audio and video in sync:-
 // ffmpeg -y -f alaw -ar 48000 -i http://localhost:8081/h/stream?suuid=cam1-stream1a -f h264 -i http://localhost:8081/h/stream?suuid=cam1-stream1 -f mp4 -af atempo=0.9804 test.mp4
+// or to correct the frame rate (PTZ camera) Not sure if genpts before the audio input makes any odds.
+// ffmpeg -y -f alaw -fflags +genpts -i http://localhost:8081/h/stream?suuid=cam1-stream1a -f hevc -fflags +genpts -r 11 -i http://localhost:8081/h/stream?suuid=cam1-stream1 -f mp4 test.mp4
 func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	log.Info("In ServeHTTPStream")
 
 	defer func() { r.Close = true }()
-	suuid := r.FormValue("suuid")
-	baseSuuid, isAudio := strings.CutSuffix(suuid, "a")
+	rsuuid := r.FormValue("rsuuid")
 
-	log.Infof("Request %s", suuid)
-	cuuid, ch := streams.addClient(baseSuuid, isAudio)
+	log.Infof("Request %s", rsuuid)
+	cuuid, ch := streams.addClient(rsuuid, false)
 	if ch == nil {
 		return
 	}
-	log.Infof("number of cuuid's = %d", len(streams.StreamMap[baseSuuid].PcktStreams))
-	defer streams.deleteClient(baseSuuid, cuuid, isAudio) // TODO: Set isAudio
+	log.Infof("number of cuuid's = %d", len(streams.StreamMap[rsuuid].PcktStreams))
+	defer streams.deleteClient(rsuuid, cuuid, false) // TODO: Set isAudio
 
-	started := isAudio // Always started for audio as we don't wait for a keyframe
-	stream := streams.StreamMap[baseSuuid]
-	var gopCache *GopCacheSnapshot
-	gopCacheUsed := stream.gopCache.GopCacheUsed
-	if gopCacheUsed {
-		if isAudio {
-			gopCache = stream.gopCache.GetAudioSnapshot()
-		} else {
-			gopCache = stream.gopCache.GetSnapshot()
-		}
-	}
 	for {
 		var data Packet
-
-		if gopCacheUsed && gopCache != nil {
-			data = gopCache.Get(ch)
-			started = true
-		} else {
-			data = <-ch
-			if !started {
-				if !isAudio && data.isKeyFrame() {
-					started = true
-				} else {
-					continue
-				}
-			}
-		}
+		data = <-ch
 		bytes, err := w.Write(data.pckt)
 		if err != nil {
 			// Warning only as it could be because the client disconnected
-			log.Warnf("writing to client for %s:= %s", suuid, err.Error())
+			log.Warnf("writing to client for %s:= %s", rsuuid, err.Error())
 			break
 		}
-		log.Tracef("Data sent to http client for %s:- %d bytes", suuid, bytes)
-
+		log.Tracef("Data sent to http client for %s:- %d bytes", rsuuid, bytes)
 	}
 }
 

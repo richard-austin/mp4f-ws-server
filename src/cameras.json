@@ -11,7 +11,8 @@
         "descr": "HD",
         "netcam_uri": "rtsp://192.168.1.21:554/11",
         "media_server_input_uri": "http://localhost:8081/live/stream?suuid=cam1-stream1",
-        "uri": "http://localhost:8081/ws/stream/suuid=cam1-stream1"
+        "uri": "http://localhost:8081/ws/stream/suuid=cam1-stream1",
+        "recording_src_url": "http://localhost:8081/recording/stream?rsuuid=cam1-stream1r"
       }
     }
   }

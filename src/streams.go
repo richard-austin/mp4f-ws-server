@@ -14,6 +14,7 @@ type Stream struct {
 	gopCache         GopCache
 	PcktStreams      map[string]*PacketStream // One packetStream for each client connected through the suuid
 	AudioPcktStreams map[string]*PacketStream // Separate set of streams for audio
+	IsRecording      bool
 }
 type StreamMap map[string]*Stream
 type Streams struct {
@@ -28,16 +29,17 @@ func NewStreams() *Streams {
 	return &s
 }
 
-func (s *Streams) addStream(suuid string, isAudio bool) {
+func (s *Streams) addStream(suuid string, isAudio bool, isRecording ...bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	stream := &Stream{PcktStreams: map[string]*PacketStream{}, AudioPcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(config.GopCache)}
-	if isAudio {
-		stream.hasAudio = true
+	gopCacheEnabled := false
+	if len(isRecording) == 0 || isRecording[0] == false {
+		gopCacheEnabled = config.GopCache
 	} else {
-		stream.hasVideo = true
+		isAudio = false
 	}
-
+	stream := &Stream{PcktStreams: map[string]*PacketStream{}, AudioPcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(gopCacheEnabled)}
+	stream.hasAudio = isAudio
 	s.StreamMap[suuid] = stream
 }
 
