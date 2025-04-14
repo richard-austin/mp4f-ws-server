@@ -3,6 +3,7 @@ module mp4f-ws-server
 go 1.19
 
 require (
+	github.com/cesbo/go-mpegts v0.0.0-20240815034630-f6032e5e7717
 	github.com/gin-gonic/gin v1.9.1
 	github.com/sirupsen/logrus v1.9.0
 	golang.org/x/net v0.10.0

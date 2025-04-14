@@ -6,7 +6,7 @@
     "rtsp_transport": "tcp",
     "streams": {
       "stream1": {
-        "audio": false,
+        "audio": true,
         "audio_encoding": "aac",
         "descr": "HD",
         "netcam_uri": "rtsp://192.168.1.21:554/11",
