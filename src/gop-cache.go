@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"sync"
 )
 
@@ -72,6 +73,28 @@ func (g *GopCache) AudioInput(p Packet) (err error) {
 	} else {
 		err = fmt.Errorf("audio GOP cache is full")
 	}
+	return
+}
+
+func (g *GopCache) RecordingInput(p Packet) (err error) {
+	err = nil
+	if !g.GopCacheUsed {
+		return
+	}
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	if (p.isMoof() || g.inputIndex == 0) && p.isFmp4KeyFrame() {
+		g.inputIndex = 0
+	}
+	if g.inputIndex < g.cacheLength {
+		g.Cache[g.inputIndex] = p
+		g.inputIndex++
+	} else {
+		err = fmt.Errorf("GOP Cache is full")
+	}
+
+	log.Infof("fmp4 gop cache index = %d", g.inputIndex)
 	return
 }
 
