@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
@@ -90,48 +89,48 @@ func serveHTTP() {
 		}
 	})
 
-	// For ffmpeg to write to for recording (with rsuuid)
-	router.POST("/recording/:rsuuid", func(c *gin.Context) {
-		req := c.Request
-		rsuuid := req.FormValue("rsuuid")
-
-		_, hasEntry := streams.StreamMap[rsuuid]
-		if hasEntry {
-			log.Errorf("Cannot add %s, there is already an existing stream with that id and media type", rsuuid)
-			return
-		}
-
-		log.Infof("Recording input connected for %s", rsuuid)
-		readCloser := req.Body
-
-		streams.addStream(rsuuid, false, true)
-		defer streams.removeStream(rsuuid)
-
-		data := make([]byte, 33000)
-
-		d := NewPacket(data) //make([]byte, numOfByte)
-		for {
-			data = data[:33000]
-			numOfByte, err := readCloser.Read(data)
-			if err != nil {
-				log.Errorf("Error reading the data feed for stream %s:- %s", rsuuid, err.Error())
-				break
-			}
-			d = NewPacket(data[:numOfByte])
-
-			if err != nil {
-				log.Error(err)
-			}
-			err = streams.put(rsuuid, d, false)
-			if err != nil {
-				log.Errorf("Error putting the packet into stream %s:- %s", rsuuid, err.Error())
-				break
-			} else if numOfByte == 0 {
-				break
-			}
-			log.Tracef("%d bytes received", numOfByte)
-		}
-	})
+	//// For ffmpeg to write to for recording (with rsuuid)
+	//router.POST("/recording/:rsuuid", func(c *gin.Context) {
+	//	req := c.Request
+	//	rsuuid := req.FormValue("rsuuid")
+	//
+	//	_, hasEntry := streams.StreamMap[rsuuid]
+	//	if hasEntry {
+	//		log.Errorf("Cannot add %s, there is already an existing stream with that id and media type", rsuuid)
+	//		return
+	//	}
+	//
+	//	log.Infof("Recording input connected for %s", rsuuid)
+	//	readCloser := req.Body
+	//
+	//	streams.addStream(rsuuid, false, true)
+	//	defer streams.removeStream(rsuuid)
+	//
+	//	data := make([]byte, 33000)
+	//
+	//	d := NewPacket(data) //make([]byte, numOfByte)
+	//	for {
+	//		data = data[:33000]
+	//		numOfByte, err := readCloser.Read(data)
+	//		if err != nil {
+	//			log.Errorf("Error reading the data feed for stream %s:- %s", rsuuid, err.Error())
+	//			break
+	//		}
+	//		d = NewPacket(data[:numOfByte])
+	//
+	//		if err != nil {
+	//			log.Error(err)
+	//		}
+	//		err = streams.put(rsuuid, d, false)
+	//		if err != nil {
+	//			log.Errorf("Error putting the packet into stream %s:- %s", rsuuid, err.Error())
+	//			break
+	//		} else if numOfByte == 0 {
+	//			break
+	//		}
+	//		log.Tracef("%d bytes received", numOfByte)
+	//	}
+	//})
 
 	router.StaticFS("/web", http.Dir("web"))
 
@@ -166,26 +165,42 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	rsuuid := r.FormValue("rsuuid")
 
 	log.Infof("Request %s", rsuuid)
-	cuuid, ch := streams.addClient(rsuuid, false)
+	baseSuuid, isAudio := strings.CutSuffix(rsuuid, "a")
+
+	cuuid, ch := streams.addClient(baseSuuid, isAudio)
 	if ch == nil {
 		return
 	}
-	log.Infof("number of cuuid's = %d", len(streams.StreamMap[rsuuid].PcktStreams))
-	defer streams.deleteClient(rsuuid, cuuid, false)
+	log.Infof("number of cuuid's = %d", len(streams.StreamMap[baseSuuid].PcktStreams))
+	defer streams.deleteClient(baseSuuid, cuuid, isAudio)
+
+	stream := streams.StreamMap[baseSuuid]
+	var gopCache *GopCacheSnapshot
+	if !isAudio { // Audio GOP cache not used for live streams, only recordings
+		gopCache = stream.gopCache.GetSnapshot()
+	} else {
+		gopCache = stream.gopCache.GetAudioSnapshot()
+	}
+	gopCacheUsed := stream.gopCache.GopCacheUsed
 
 	started := false
 	for {
 		var data Packet
-		data = <-ch
-		log.Infof("Length = %d data = %02x", len(data.pckt), data.pckt)
-		//if bytes.Index(data.pckt, []byte{0, 0, 0, 1, 0x67, 0x64}) != -1 {
-		//	started = true
-		//}
-		if !started && isKeyFrame(data.pckt) {
+		if gopCacheUsed {
+			data = gopCache.Get(ch)
 			started = true
-		}
-		if !started {
-			continue
+		} else {
+			data = <-ch
+			if !started {
+				if isAudio {
+					started = true
+				}
+				if data.isKeyFrame() {
+					started = true
+				} else {
+					continue
+				}
+			}
 		}
 		// See https://en.wikipedia.org/wiki/MPEG_transport_stream
 		//	log.Infof("Length = %d %02x", len(data.pckt), data.pckt)
@@ -197,44 +212,6 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Tracef("Data sent to http client for %s:- %d bytes", rsuuid, numbytes)
 	}
-}
-
-// isKeyFrame
-// Detects keyframes in mpegts packets
-func isKeyFrame(pckt []byte) (keyFrame bool) {
-	keyFrame = false
-	log.Infof("%02x", pckt)
-	idx := bytes.Index(pckt, h264Start)
-	if idx != -1 { // It's h264
-		log.Infof("h264 detected")
-		slice := pckt[idx+len(h264Start) : idx+len(h264Start)+2]
-		log.Infof("idx = %d: Seq = %02x", idx, pckt[idx:idx+4])
-		log.Infof("Slice = %02x", slice)
-		keyFrame = bytes.Equal(slice, h264KeyFrame1) ||
-			bytes.Equal(slice, h264KeyFrame2) ||
-			bytes.Equal(slice, h264KeyFrame3)
-		log.Infof("keyFrame = %t", keyFrame)
-		if !keyFrame {
-			return isKeyFrame(pckt[idx+len(h264Start):])
-		}
-
-	} else {
-		idx := bytes.Index(pckt, hevcStart)
-		if idx != -1 { // It's hevc
-			log.Infof("hevc detected")
-			//	slice := pckt[idx+len(hevcStart):]
-			// HEVC header
-			theByte := pckt[idx+len(hevcStart)]
-			keyFrame = theByte == 0x40
-			theByte = (theByte >> 1) & 0x3f
-			keyFrame = theByte == 0x19 || theByte == 0x20
-
-			if !keyFrame {
-				return isKeyFrame(pckt[idx+len(hevcStart):])
-			}
-		}
-	}
-	return keyFrame
 }
 
 // ws For live streaming connection
@@ -292,12 +269,14 @@ func ws(ws *websocket.Conn) {
 	var gopCache *GopCacheSnapshot
 	if !isAudio { // Audio GOP cache not used for live streams, only recordings
 		gopCache = stream.gopCache.GetSnapshot()
+	} else {
+		gopCache = stream.gopCache.GetAudioSnapshot()
 	}
 	gopCacheUsed := stream.gopCache.GopCacheUsed
 	// Main loop to send data to the browser
 	started := isAudio // Always started for audio as we don't wait for a keyframe
 	for {
-		if gopCacheUsed && !isAudio {
+		if gopCacheUsed {
 			data = gopCache.Get(ch)
 			started = true
 		} else {
@@ -324,3 +303,42 @@ func ws(ws *websocket.Conn) {
 		log.Tracef("Data sent to client %d bytes", len(data.pckt))
 	}
 }
+
+//
+//// isKeyFrame
+//// Detects keyframes in mpegts packets
+//func isKeyFrame(pckt []byte) (keyFrame bool) {
+//	keyFrame = false
+//	log.Infof("%02x", pckt)
+//	idx := bytes.Index(pckt, h264Start)
+//	if idx != -1 { // It's h264
+//		log.Infof("h264 detected")
+//		slice := pckt[idx+len(h264Start) : idx+len(h264Start)+2]
+//		log.Infof("idx = %d: Seq = %02x", idx, pckt[idx:idx+4])
+//		log.Infof("Slice = %02x", slice)
+//		keyFrame = bytes.Equal(slice, h264KeyFrame1) ||
+//			bytes.Equal(slice, h264KeyFrame2) ||
+//			bytes.Equal(slice, h264KeyFrame3)
+//		log.Infof("keyFrame = %t", keyFrame)
+//		if !keyFrame {
+//			return isKeyFrame(pckt[idx+len(h264Start):])
+//		}
+//
+//	} else {
+//		idx := bytes.Index(pckt, hevcStart)
+//		if idx != -1 { // It's hevc
+//			log.Infof("hevc detected")
+//			//	slice := pckt[idx+len(hevcStart):]
+//			// HEVC header
+//			theByte := pckt[idx+len(hevcStart)]
+//			keyFrame = theByte == 0x40
+//			theByte = (theByte >> 1) & 0x3f
+//			keyFrame = theByte == 0x19 || theByte == 0x20
+//
+//			if !keyFrame {
+//				return isKeyFrame(pckt[idx+len(hevcStart):])
+//			}
+//		}
+//	}
+//	return keyFrame
+//}

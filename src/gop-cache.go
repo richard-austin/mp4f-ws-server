@@ -100,14 +100,14 @@ func (g *GopCache) GetAudioSnapshot() (snapshot *GopCacheSnapshot) {
 func newFeeder(g *GopCache, isAudio bool) (feeder *GopCacheSnapshot) {
 	if !isAudio {
 		g.mutex.Lock()
-		feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.cacheLength)}
+		feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.inputIndex)}
 		defer g.mutex.Unlock()
 		for _, pkt := range g.Cache[:g.inputIndex] {
 			feeder.pktChan <- pkt
 		}
 	} else {
 		g.audioMutex.Lock()
-		feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.audioCacheLength)}
+		feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.audioInputIndex)}
 		defer g.audioMutex.Unlock()
 		for _, pkt := range g.AudioCache[:g.audioInputIndex] {
 			feeder.pktChan <- pkt

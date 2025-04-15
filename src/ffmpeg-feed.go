@@ -49,7 +49,7 @@ func ffmpegFeed(config *Config, cameras *Cameras) {
 					codec, err := codecs.getCodecString(suuid)
 					log.Info("Codec string = " + codec)
 					log.Info("Recording src url = " + stream.RecordingSrcURL)
-					cmdStr := fmt.Sprintf("/usr/bin/ffmpeg -loglevel warning -hide_banner %s-fflags nobuffer -rtsp_transport %s -i  %s -c:v copy %s  -f %s -preset ultrafast -tune zero_latency %s -vn -c:a pcm_alaw -b:a 64K -ar 48000 -af atempo=1.03 -f alaw -preset ultrafast -tune zero_latency %sa -c:v copy -c:a aac -f mpegts %s", timeout, rtspTransport, netcamUri, audio, streamInfo.CodecName, stream.MediaServerInputUri, stream.MediaServerInputUri, stream.RecordingSrcURL)
+					cmdStr := fmt.Sprintf("/usr/bin/ffmpeg -loglevel warning -hide_banner %s-fflags nobuffer -rtsp_transport %s -i  %s  -c:v copy %s  -f %s -preset ultrafast -tune zero_latency %s -vn -c:a pcm_alaw -b:a 64K -ar 48000 -af atempo=1.03 -f alaw -preset ultrafast -tune zero_latency %sa", timeout, rtspTransport, netcamUri, audio, streamInfo.CodecName, stream.MediaServerInputUri, stream.MediaServerInputUri)
 					log.Info(cmdStr)
 					cmdStr += " 2>&1 >/dev/null | ts '[%Y-%m-%d %H:%M:%S]' >> " + path + "ffmpeg_" + strings.Replace(camera.Name, " ", "_", -1) + "_" + strings.Replace(strings.Replace(stream.Descr, " ", "_", -1), " ", "_", -1) + "_$(date +%Y%m%d).log"
 					cmd := exec.Command("bash", "-c", cmdStr)
