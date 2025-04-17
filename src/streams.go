@@ -60,7 +60,7 @@ func getStreamC(suuid string) (streamC StreamC, err error) {
 		dashPos := strings.Index(suuid, "-")
 		if dashPos != -1 {
 			camLen := len("cam")
-			camNum := suuid[camLen : camLen+dashPos-camLen]
+			camNum := suuid[camLen:dashPos]
 			camName := "camera" + camNum
 			log.Tracef("camera: %s", camName)
 			cam, ok := cameras.Cameras[camName]
@@ -117,7 +117,7 @@ func (s *Streams) deleteClient(suuid string, cuuid string) {
 	}
 }
 
-func (s *Streams) put(suuid string, pckt Packet, isAudio bool, isRecording ...bool) error {
+func (s *Streams) put(suuid string, pckt Packet, isRecording ...bool) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	var retVal error = nil
@@ -128,19 +128,31 @@ func (s *Streams) put(suuid string, pckt Packet, isAudio bool, isRecording ...bo
 			if err != nil {
 				_ = fmt.Errorf(err.Error())
 			}
-		}
-		err := stream.gopCache.Input(pckt)
-		if err != nil {
-			_ = fmt.Errorf(err.Error())
-		}
-		for _, packetStream := range stream.PcktStreams {
-			length := len(packetStream.ps)
-			log.Tracef("%s channel length = %d", suuid, length)
-			select {
-			case packetStream.ps <- pckt:
-			default:
-				{
-					retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
+			for _, packetStream := range stream.PcktStreams {
+				length := len(packetStream.ps)
+				log.Tracef("%s channel length = %d", suuid, length)
+				select {
+				case packetStream.ps <- pckt:
+				default:
+					{
+						retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
+					}
+				}
+			}
+		} else {
+			err := stream.gopCache.Input(pckt)
+			if err != nil {
+				_ = fmt.Errorf(err.Error())
+			}
+			for _, packetStream := range stream.PcktStreams {
+				length := len(packetStream.ps)
+				log.Tracef("%s channel length = %d", suuid, length)
+				select {
+				case packetStream.ps <- pckt:
+				default:
+					{
+						retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
+					}
 				}
 			}
 		}

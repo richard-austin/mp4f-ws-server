@@ -78,7 +78,7 @@ func serveHTTP() {
 			if err != nil {
 				log.Error(err)
 			}
-			err = streams.put(suuid, d, isAudio)
+			err = streams.put(suuid, d)
 			if err != nil {
 				log.Errorf("Error putting the packet into stream %s:- %s", suuid, err.Error())
 				break
@@ -153,7 +153,7 @@ func serveHTTP() {
 				log.Error(err)
 			}
 
-			err = streams.put(suuid, d, false, true)
+			err = streams.put(suuid, d, true)
 
 			if err != nil {
 				log.Errorf("Error putting the packet into stream %s:- %s", suuid, err.Error())
@@ -227,7 +227,6 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	defer stream.bucketBrigade.DestroyFeeder(bb)
 	log.Infof("Bucket brigade cache size for %s = %d", suuid, stream.bucketBrigade.cacheLength)
 	for {
-		var data Packet
 		data = bb.Get()
 		bytes, err := w.Write(data.pckt)
 		if err != nil {
