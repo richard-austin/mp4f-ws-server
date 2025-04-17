@@ -50,11 +50,9 @@ func serveHTTP() {
 	router.POST("/live/:suuid", func(c *gin.Context) {
 		req := c.Request
 		suuid := req.FormValue("suuid")
-
-		baseSuuid, isAudio := strings.CutSuffix(suuid, "a")
-
-		stream, hasEntry := streams.StreamMap[baseSuuid]
-		if hasEntry && (isAudio && stream.hasAudio || !isAudio) {
+		isAudio := strings.HasSuffix(suuid, "a")
+		_, hasEntry := streams.StreamMap[suuid]
+		if hasEntry {
 			log.Errorf("Cannot add %s, there is already an existing stream with that id and media type", suuid)
 			return
 		}
@@ -62,8 +60,8 @@ func serveHTTP() {
 		log.Infof("Input connected for %s", suuid)
 		readCloser := req.Body
 
-		streams.addStream(baseSuuid, isAudio)
-		defer streams.removeStream(baseSuuid)
+		streams.addStream(suuid, isAudio)
+		defer streams.removeStream(suuid)
 
 		data := make([]byte, 33000)
 
@@ -80,7 +78,7 @@ func serveHTTP() {
 			if err != nil {
 				log.Error(err)
 			}
-			err = streams.put(baseSuuid, d, isAudio)
+			err = streams.put(suuid, d, isAudio)
 			if err != nil {
 				log.Errorf("Error putting the packet into stream %s:- %s", suuid, err.Error())
 				break
@@ -251,7 +249,7 @@ func ws(ws *websocket.Conn) {
 		}
 	}()
 	suuid := ws.Request().FormValue("suuid")
-	baseSuuid, isAudio := strings.CutSuffix(suuid, "a")
+	isAudio := strings.HasSuffix(suuid, "a")
 
 	log.Infof("Request %s", suuid)
 	err := ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
@@ -259,12 +257,12 @@ func ws(ws *websocket.Conn) {
 		log.Errorf("Error in SetWriteDeadline %s", err.Error())
 		return
 	}
-	cuuid, ch := streams.addClient(baseSuuid, isAudio)
+	cuuid, ch := streams.addClient(suuid)
 	if ch == nil {
 		return
 	}
-	defer streams.deleteClient(baseSuuid, cuuid, isAudio)
-	log.Infof("number of cuuid's = %d", len(streams.StreamMap[baseSuuid].PcktStreams))
+	defer streams.deleteClient(suuid, cuuid)
+	log.Infof("number of cuuid's = %d", len(streams.StreamMap[suuid].PcktStreams))
 
 	// Send the header information (codec)
 	var data Packet
@@ -292,18 +290,14 @@ func ws(ws *websocket.Conn) {
 		}
 	}()
 
-	stream := streams.StreamMap[baseSuuid]
+	stream := streams.StreamMap[suuid]
 	var gopCache *GopCacheSnapshot
-	if !isAudio { // Audio GOP cache not used for live streams, only recordings
-		gopCache = stream.gopCache.GetSnapshot()
-	} else {
-		gopCache = stream.gopCache.GetAudioSnapshot()
-	}
+	gopCache = stream.gopCache.GetSnapshot()
 	gopCacheUsed := stream.gopCache.GopCacheUsed
 	// Main loop to send data to the browser
 	started := isAudio // Always started for audio as we don't wait for a keyframe
 	for {
-		if gopCacheUsed {
+		if gopCacheUsed && !isAudio { // GOP cache not used for audio
 			data = gopCache.Get(ch)
 			started = true
 		} else {

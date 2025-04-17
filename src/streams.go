@@ -11,13 +11,11 @@ import (
 )
 
 type Stream struct {
-	ftyp             Packet
-	moov             Packet
-	hasAudio         bool
-	gopCache         GopCache
-	bucketBrigade    BucketBrigade
-	PcktStreams      map[string]*PacketStream // One packetStream for each client connected through the suuid
-	AudioPcktStreams map[string]*PacketStream // Separate set of streams for audio
+	ftyp          Packet
+	moov          Packet
+	gopCache      GopCache
+	bucketBrigade BucketBrigade
+	PcktStreams   map[string]*PacketStream // One packetStream for each client connected through the suuid
 }
 type StreamMap map[string]*Stream
 type Streams struct {
@@ -32,17 +30,14 @@ func NewStreams() *Streams {
 	return &s
 }
 
-func (s *Streams) addStream(suuid string, isAudio bool, isRecording ...bool) {
+func (s *Streams) addStream(suuid string, isAudio bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	gopCacheEnabled := false
-	if len(isRecording) == 0 || isRecording[0] == false {
-		gopCacheEnabled = config.GopCache
-	} else {
-		isAudio = false
+	gopCacheUsed := config.GopCache
+	if isAudio {
+		gopCacheUsed = false
 	}
-	stream := &Stream{PcktStreams: map[string]*PacketStream{}, AudioPcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(gopCacheEnabled), bucketBrigade: NewBucketBrigade( /*streamC.PreambleFrames*/ 40)}
-	stream.hasAudio = isAudio
+	stream := &Stream{PcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(gopCacheUsed), bucketBrigade: NewBucketBrigade( /*streamC.PreambleFrames*/ 40)}
 	s.StreamMap[suuid] = stream
 }
 
@@ -98,18 +93,14 @@ func (s *Streams) removeStream(suuid string) {
 	}
 }
 
-func (s *Streams) addClient(suuid string, isAudio bool) (cuuid string, pkt chan Packet) {
+func (s *Streams) addClient(suuid string) (cuuid string, pkt chan Packet) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	stream, ok := s.StreamMap[suuid]
 	if ok {
 		cuuid = pseudoUUID()
 		pktStream := NewPacketStream()
-		if !isAudio {
-			stream.PcktStreams[cuuid] = &pktStream
-		} else {
-			stream.AudioPcktStreams[cuuid] = &pktStream
-		}
+		stream.PcktStreams[cuuid] = &pktStream
 		pkt = pktStream.ps
 	} else {
 		pkt = nil
@@ -117,17 +108,12 @@ func (s *Streams) addClient(suuid string, isAudio bool) (cuuid string, pkt chan 
 	return
 }
 
-func (s *Streams) deleteClient(suuid string, cuuid string, isAudio bool) {
+func (s *Streams) deleteClient(suuid string, cuuid string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	stream, ok := s.StreamMap[suuid]
 	if ok {
-		if isAudio {
-			delete(stream.AudioPcktStreams, cuuid)
-		} else {
-			delete(stream.PcktStreams, cuuid)
-		}
-
+		delete(stream.PcktStreams, cuuid)
 	}
 }
 
@@ -142,52 +128,22 @@ func (s *Streams) put(suuid string, pckt Packet, isAudio bool, isRecording ...bo
 			if err != nil {
 				_ = fmt.Errorf(err.Error())
 			}
-			//for _, packetStream := range stream.PcktStreams {
-			//	length := len(packetStream.ps)
-			//	log.Tracef("%s channel length = %d", suuid, length)
-			//	select {
-			//	case packetStream.ps <- pckt:
-			//	default:
-			//		{
-			//			retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
-			//		}
-			//	}
-			//}
-
-		} else if !isAudio {
-			err := stream.gopCache.Input(pckt)
-			if err != nil {
-				_ = fmt.Errorf(err.Error())
-			}
-			for _, packetStream := range stream.PcktStreams {
-				length := len(packetStream.ps)
-				log.Tracef("%s channel length = %d", suuid, length)
-				select {
-				case packetStream.ps <- pckt:
-				default:
-					{
-						retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
-					}
-				}
-			}
-		} else {
-			err := stream.gopCache.AudioInput(pckt)
-			if err != nil {
-				_ = fmt.Errorf(err.Error())
-			}
-			for _, packetStream := range stream.AudioPcktStreams {
-				length := len(packetStream.ps)
-				log.Tracef("%s audio channel length = %d", suuid, length)
-				select {
-				case packetStream.ps <- pckt:
-				default:
-					{
-						retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
-					}
+		}
+		err := stream.gopCache.Input(pckt)
+		if err != nil {
+			_ = fmt.Errorf(err.Error())
+		}
+		for _, packetStream := range stream.PcktStreams {
+			length := len(packetStream.ps)
+			log.Tracef("%s channel length = %d", suuid, length)
+			select {
+			case packetStream.ps <- pckt:
+			default:
+				{
+					retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
 				}
 			}
 		}
-
 	} else {
 		retVal = fmt.Errorf("no stream with name %s was found", suuid)
 	}
