@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"strings"
 	"sync"
 )
 
@@ -13,12 +14,10 @@ type Stream struct {
 	ftyp             Packet
 	moov             Packet
 	hasAudio         bool
-	hasVideo         bool
 	gopCache         GopCache
 	bucketBrigade    BucketBrigade
 	PcktStreams      map[string]*PacketStream // One packetStream for each client connected through the suuid
 	AudioPcktStreams map[string]*PacketStream // Separate set of streams for audio
-	IsRecording      bool
 }
 type StreamMap map[string]*Stream
 type Streams struct {
@@ -45,6 +44,49 @@ func (s *Streams) addStream(suuid string, isAudio bool, isRecording ...bool) {
 	stream := &Stream{PcktStreams: map[string]*PacketStream{}, AudioPcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(gopCacheEnabled), bucketBrigade: NewBucketBrigade( /*streamC.PreambleFrames*/ 40)}
 	stream.hasAudio = isAudio
 	s.StreamMap[suuid] = stream
+}
+
+func (s *Streams) addRecordingStream(suuid string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	/*streamC*/ _, err := getStreamC(suuid)
+	if err != nil {
+		log.Errorf("Failed to get streamC: %v", err)
+	}
+	s.StreamMap[suuid] = &Stream{PcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(config.GopCache), bucketBrigade: NewBucketBrigade(40)}
+}
+
+/** getStreamC: Get camera stream for the fmp4 http stream suuid
+ */
+func getStreamC(suuid string) (streamC StreamC, err error) {
+	err = nil
+	log.Tracef("suuid: %s", suuid)
+	if len(suuid) > 3 {
+		dashPos := strings.Index(suuid, "-")
+		if dashPos != -1 {
+			camLen := len("cam")
+			camNum := suuid[camLen : camLen+dashPos-camLen]
+			camName := "camera" + camNum
+			log.Tracef("camera: %s", camName)
+			cam, ok := cameras.Cameras[camName]
+			if ok {
+				streamName, _ := strings.CutSuffix(suuid[dashPos+1:], "r") // Remove the "r" recording suffix to get the stream name
+				log.Tracef("Stream name: %s", streamName)
+
+				stream, ok := cam.Streams[streamName]
+				if ok {
+					return stream, err
+				} else {
+					err = fmt.Errorf("stream %s not found", streamName)
+				}
+			} else {
+				err = fmt.Errorf("camera %s not found", camName)
+			}
+		} else {
+			err = fmt.Errorf("cannot find dash in stream nameq: %s", suuid)
+		}
+	}
+	return
 }
 
 func (s *Streams) removeStream(suuid string) {
@@ -96,25 +138,21 @@ func (s *Streams) put(suuid string, pckt Packet, isAudio bool, isRecording ...bo
 	stream, ok := s.StreamMap[suuid]
 	if ok {
 		if len(isRecording) > 0 && isRecording[0] {
-			err := stream.gopCache.RecordingInput(pckt)
+			err := stream.bucketBrigade.Input(pckt)
 			if err != nil {
 				_ = fmt.Errorf(err.Error())
 			}
-			err = stream.bucketBrigade.Input(pckt)
-			if err != nil {
-				_ = fmt.Errorf(err.Error())
-			}
-			for _, packetStream := range stream.PcktStreams {
-				length := len(packetStream.ps)
-				log.Tracef("%s channel length = %d", suuid, length)
-				select {
-				case packetStream.ps <- pckt:
-				default:
-					{
-						retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
-					}
-				}
-			}
+			//for _, packetStream := range stream.PcktStreams {
+			//	length := len(packetStream.ps)
+			//	log.Tracef("%s channel length = %d", suuid, length)
+			//	select {
+			//	case packetStream.ps <- pckt:
+			//	default:
+			//		{
+			//			retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
+			//		}
+			//	}
+			//}
 
 		} else if !isAudio {
 			err := stream.gopCache.Input(pckt)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"sync"
 )
 
@@ -14,8 +13,8 @@ type GopCache struct {
 	Cache            []Packet
 	audioCacheLength int
 	audioMutex       sync.Mutex
-	audioInputIndex  int
 	AudioCache       []Packet
+	audioInputIndex  int
 }
 
 type GopCacheSnapshot struct {
@@ -94,7 +93,7 @@ func (g *GopCache) RecordingInput(p Packet) (err error) {
 		err = fmt.Errorf("GOP Cache is full")
 	}
 
-	log.Infof("fmp4 gop cache index = %d", g.inputIndex)
+	//log.Infof("fmp4 gop cache index = %d", g.inputIndex)
 	return
 }
 

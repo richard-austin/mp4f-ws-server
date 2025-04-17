@@ -54,7 +54,7 @@ func serveHTTP() {
 		baseSuuid, isAudio := strings.CutSuffix(suuid, "a")
 
 		stream, hasEntry := streams.StreamMap[baseSuuid]
-		if hasEntry && (isAudio && stream.hasAudio || !isAudio && stream.hasVideo) {
+		if hasEntry && (isAudio && stream.hasAudio || !isAudio) {
 			log.Errorf("Cannot add %s, there is already an existing stream with that id and media type", suuid)
 			return
 		}
@@ -103,7 +103,7 @@ func serveHTTP() {
 		log.Infof("Input connected for %s", suuid)
 		readCloser := req.Body
 
-		streams.addStream(suuid, false, true)
+		streams.addRecordingStream(suuid)
 		defer streams.removeStream(suuid)
 
 		data := make([]byte, 33000)
@@ -189,10 +189,8 @@ func serveHTTP() {
 }
 
 // ServeHTTPStream For recording from
-// Recording command example which seems to work well. The tempo filter compensates for the tempo filter used to keep libe audio and video in sync:-
-// ffmpeg -y -f alaw -ar 48000 -i http://localhost:8081/h/stream?suuid=cam1-stream1a -f h264 -i http://localhost:8081/h/stream?suuid=cam1-stream1 -f mp4 -af atempo=0.9804 test.mp4
-// or to correct the frame rate (PTZ camera) Not sure if genpts before the audio input makes any odds.
-// ffmpeg -y -f alaw -fflags +genpts -i http://localhost:8081/h/stream?suuid=cam1-stream1a -f hevc -fflags +genpts -r 11 -i http://localhost:8081/h/stream?suuid=cam1-stream1 -f mp4 test.mp4
+// Recording command example which seems to work well.
+// ffmpeg -y -f mp4 -i http://localhost:8081/h/stream?rsuuid=cam1-stream1r -f mp4 test.mp4
 func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 	log.Info("In ServeHTTPStream")
 
@@ -206,6 +204,7 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nBytes, err := w.Write(data.pckt)
+	log.Infof("ftyp = %s", string(data.pckt))
 	if err != nil {
 		log.Errorf("Error writing ftyp: %s", err.Error())
 		return
@@ -218,12 +217,13 @@ func ServeHTTPStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nBytes, err = w.Write(data.pckt)
+	log.Infof("moov = %s", string(data.pckt))
 	if err != nil {
 		log.Errorf("Error writing moov: %s", err.Error())
 		return
 	}
 	log.Tracef("Sent moov through http to %s:- %d nBytes", suuid, nBytes)
-
+	time.Sleep(3 * time.Second)
 	stream := streams.StreamMap[suuid]
 	bb := stream.bucketBrigade.GetFeeder()
 	defer stream.bucketBrigade.DestroyFeeder(bb)
