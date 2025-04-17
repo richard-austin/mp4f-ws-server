@@ -3,15 +3,19 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"sync"
 )
 
 type Stream struct {
+	ftyp             Packet
+	moov             Packet
 	hasAudio         bool
 	hasVideo         bool
 	gopCache         GopCache
+	bucketBrigade    BucketBrigade
 	PcktStreams      map[string]*PacketStream // One packetStream for each client connected through the suuid
 	AudioPcktStreams map[string]*PacketStream // Separate set of streams for audio
 	IsRecording      bool
@@ -38,7 +42,7 @@ func (s *Streams) addStream(suuid string, isAudio bool, isRecording ...bool) {
 	} else {
 		isAudio = false
 	}
-	stream := &Stream{PcktStreams: map[string]*PacketStream{}, AudioPcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(gopCacheEnabled)}
+	stream := &Stream{PcktStreams: map[string]*PacketStream{}, AudioPcktStreams: map[string]*PacketStream{}, gopCache: NewGopCache(gopCacheEnabled), bucketBrigade: NewBucketBrigade( /*streamC.PreambleFrames*/ 40)}
 	stream.hasAudio = isAudio
 	s.StreamMap[suuid] = stream
 }
@@ -85,13 +89,34 @@ func (s *Streams) deleteClient(suuid string, cuuid string, isAudio bool) {
 	}
 }
 
-func (s *Streams) put(suuid string, pckt Packet, isAudio bool) error {
+func (s *Streams) put(suuid string, pckt Packet, isAudio bool, isRecording ...bool) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	var retVal error = nil
 	stream, ok := s.StreamMap[suuid]
 	if ok {
-		if !isAudio {
+		if len(isRecording) > 0 && isRecording[0] {
+			err := stream.gopCache.RecordingInput(pckt)
+			if err != nil {
+				_ = fmt.Errorf(err.Error())
+			}
+			err = stream.bucketBrigade.Input(pckt)
+			if err != nil {
+				_ = fmt.Errorf(err.Error())
+			}
+			for _, packetStream := range stream.PcktStreams {
+				length := len(packetStream.ps)
+				log.Tracef("%s channel length = %d", suuid, length)
+				select {
+				case packetStream.ps <- pckt:
+				default:
+					{
+						retVal = fmt.Errorf("client channel for %s has reached capacity (%d)", suuid, length)
+					}
+				}
+			}
+
+		} else if !isAudio {
 			err := stream.gopCache.Input(pckt)
 			if err != nil {
 				_ = fmt.Errorf(err.Error())
@@ -152,7 +177,6 @@ func (s *Streams) getCodec(suuid string) (err error, pckt Packet) {
 
 type PacketStream struct {
 	ps chan Packet
-	//	gopCacheCopy *GopCacheCopy
 }
 
 func NewPacketStream() (packetStream PacketStream) {
@@ -207,4 +231,116 @@ func pseudoUUID() (uuid string) {
 	}
 	uuid = fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 	return
+}
+
+func (s *Streams) putFtyp(suuid string, pckt Packet) (retVal error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	retVal = nil
+	// Check it is actually a ftyp
+	val := getSubBox(pckt, "ftyp")
+	if val == nil {
+		retVal = fmt.Errorf("The packet recieved in putFtyp was not a ftyp")
+		return
+	} else {
+		stream, ok := s.StreamMap[suuid]
+		if ok {
+			stream.ftyp = pckt
+			s.StreamMap[suuid] = stream
+		} else {
+			retVal = fmt.Errorf("Stream %s not found", suuid)
+		}
+	}
+	return
+}
+
+func (s *Streams) putMoov(suuid string, pckt Packet) (retVal error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	retVal = nil
+	// Check it is actually a moov
+	val := getSubBox(pckt, "moov")
+	if val == nil {
+		retVal = fmt.Errorf("The packet recieved in putMoov was not a moov")
+		return
+	} else {
+		stream, ok := s.StreamMap[suuid]
+		if ok {
+			stream.moov = pckt
+			s.StreamMap[suuid] = stream
+		} else {
+			retVal = fmt.Errorf("Stream %s not found", suuid)
+		}
+	}
+	return
+}
+
+func (p Packet) isFmp4KeyFrame() (retVal bool) {
+	// [moof [mfhd] [traf [tfhd] [tfdt] [moof]]]
+	retVal = false
+	moof := getSubBox(p, "moof")
+	if moof == nil {
+		log.Warnf("moof was nil in isKeyFrame")
+		return
+	}
+	flags := moof[3:5]
+
+	retVal = flags[0] == 0x68 || flags[0] == 0xb4
+	//	log.Infof("flags = 0x%x%c, %t", flags[0], flags[1], retVal)
+	return
+}
+
+func (p Packet) isMoof() (retVal bool) {
+	retVal = false
+	if len(p.pckt) > 20 {
+		moof := getSubBox(p, "moof")
+		retVal = moof != nil
+	}
+	return
+}
+
+func getSubBox(pckt Packet, boxName string) (sub_box []byte) {
+	searchData := pckt.pckt
+	searchTerm := []byte(boxName)
+	idx := bytes.Index(searchData, searchTerm)
+
+	if idx >= 4 {
+		length := int(binary.BigEndian.Uint32(searchData[idx-4 : idx]))
+		sub_box = searchData[idx-4 : length+idx-4]
+
+	} else {
+		sub_box = nil
+	}
+	return
+}
+
+func (s *Streams) getFtyp(suuid string) (err error, ftyp Packet) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	err = nil
+	stream, ok := s.StreamMap[suuid]
+
+	log.Infof("ok = %t", ok)
+	if !ok {
+		err = fmt.Errorf("stream %s not found", suuid)
+	} else if stream.ftyp.pckt == nil {
+		err = fmt.Errorf("no ftyp for stream %s", suuid)
+	} else {
+		ftyp = stream.ftyp
+	}
+	return
+}
+
+func (s *Streams) getMoov(suuid string) (error, Packet) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	var retVal error = nil
+	stream, ok := s.StreamMap[suuid]
+	if !ok {
+		retVal = fmt.Errorf("stream %s not found", suuid)
+	} else if stream.moov.pckt == nil {
+		retVal = fmt.Errorf("no moov for stream %s", suuid)
+	}
+
+	return retVal, stream.moov
 }
