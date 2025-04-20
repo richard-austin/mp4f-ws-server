@@ -6,11 +6,15 @@ import (
 )
 
 type GopCache struct {
-	GopCacheUsed bool
-	cacheLength  int
-	mutex        sync.Mutex
-	inputIndex   int
-	Cache        []Packet
+	GopCacheUsed     bool
+	cacheLength      int
+	mutex            sync.Mutex
+	inputIndex       int
+	Cache            []Packet
+	audioCacheLength int
+	audioMutex       sync.Mutex
+	audioInputIndex  int
+	AudioCache       []Packet
 }
 
 type GopCacheSnapshot struct {
@@ -19,7 +23,8 @@ type GopCacheSnapshot struct {
 
 func NewGopCache(used bool) (cache GopCache) {
 	const cacheLength int = 90
-	cache = GopCache{Cache: make([]Packet, cacheLength), cacheLength: cacheLength - 1, inputIndex: 0, GopCacheUsed: used}
+	const audioCacheLength int = 600
+	cache = GopCache{Cache: make([]Packet, cacheLength), cacheLength: cacheLength - 1, inputIndex: 0, AudioCache: make([]Packet, audioCacheLength), audioCacheLength: audioCacheLength, audioInputIndex: 0, GopCacheUsed: used}
 	return
 }
 
@@ -34,7 +39,10 @@ func (g *GopCache) Input(p Packet) (err error) {
 	defer g.mutex.Unlock()
 
 	if p.isKeyFrame() {
+		g.audioMutex.Lock()
+		defer g.audioMutex.Unlock()
 		g.inputIndex = 0
+		g.audioInputIndex = 0
 	}
 	if g.inputIndex < g.cacheLength {
 		g.Cache[g.inputIndex] = p
@@ -46,25 +54,24 @@ func (g *GopCache) Input(p Packet) (err error) {
 	return
 }
 
-func (g *GopCache) RecordingInput(p Packet) (err error) {
+// AudioInput
+// "GOP" cache for audio packets. The audioInputIndex is reset to zero when video keyframes come in.
+// This means that the video and audio start from the same point in time and helps to keep the
+// video and audio in sync for recordings
+func (g *GopCache) AudioInput(p Packet) (err error) {
 	err = nil
 	if !g.GopCacheUsed {
 		return
 	}
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-
-	if (p.isMoof() || g.inputIndex == 0) && p.isFmp4KeyFrame() {
-		g.inputIndex = 0
-	}
-	if g.inputIndex < g.cacheLength {
-		g.Cache[g.inputIndex] = p
-		g.inputIndex++
+	g.audioMutex.Lock()
+	defer g.audioMutex.Unlock()
+	if g.audioInputIndex < g.audioCacheLength {
+		g.AudioCache[g.audioInputIndex] = p
+		//		log.Info("Audio gop cache size = " + strconv.Itoa(g.audioInputIndex))
+		g.audioInputIndex++
 	} else {
-		err = fmt.Errorf("GOP Cache is full")
+		err = fmt.Errorf("audio GOP cache is full")
 	}
-
-	//log.Infof("fmp4 gop cache index = %d", g.inputIndex)
 	return
 }
 
@@ -75,19 +82,36 @@ func (g *GopCache) GetSnapshot() (snapshot *GopCacheSnapshot) {
 	if !g.GopCacheUsed {
 		return
 	}
-	snapshot = newFeeder(g)
+	snapshot = newFeeder(g, false)
+	return
+}
+
+func (g *GopCache) GetAudioSnapshot() (snapshot *GopCacheSnapshot) {
+	if !g.GopCacheUsed {
+		return
+	}
+	snapshot = newFeeder(g, true)
 	return
 }
 
 // newFeeder
 // Create a new GOP cache snapshot from the current GOP cache
 // **
-func newFeeder(g *GopCache) (feeder *GopCacheSnapshot) {
-	g.mutex.Lock()
-	feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.inputIndex)}
-	defer g.mutex.Unlock()
-	for _, pkt := range g.Cache[:g.inputIndex] {
-		feeder.pktChan <- pkt
+func newFeeder(g *GopCache, isAudio bool) (feeder *GopCacheSnapshot) {
+	if !isAudio {
+		g.mutex.Lock()
+		feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.inputIndex)}
+		defer g.mutex.Unlock()
+		for _, pkt := range g.Cache[:g.inputIndex] {
+			feeder.pktChan <- pkt
+		}
+	} else {
+		g.audioMutex.Lock()
+		feeder = &GopCacheSnapshot{pktChan: make(chan Packet, g.audioInputIndex)}
+		defer g.audioMutex.Unlock()
+		for _, pkt := range g.AudioCache[:g.audioInputIndex] {
+			feeder.pktChan <- pkt
+		}
 	}
 	return
 }
