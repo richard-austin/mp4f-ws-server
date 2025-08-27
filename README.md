@@ -1,3 +1,15 @@
+```txt
+It turns out that the -r option only works for raw stream data. (This can be an H.264 stream... it does not have to be just pixel data.)
+
+In this example, I'm using MP4 containers. First, extract the stream:
+
+ffmpeg -i source.mp4 -map 0:v -vcodec copy -bsf:v h264_mp4toannexb source-video.h264
+Next, take that stream and re-mux it, but with a specific frame rate and generated timestamps.
+
+ffmpeg -fflags +genpts -r 60 -i source-video.h264 -vcodec copy output.mp4
+```
+
+
 # RTSPToFmp4
 ##  A fragmented MP4 media server for live streaming from an RTSP service to an MSE browser front end
 ### Features
